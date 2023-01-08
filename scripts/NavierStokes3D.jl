@@ -109,7 +109,7 @@ using MAT, Plots
         @parallel correct_V!(Vx,Vy,Vz,Pr,dt,ρ,dx,dy,dz)
         @parallel set_sphere!(C,Vx,Vy,Vz,a2,b2,c2,ox,oy,oz,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
         set_bc_Vel!(Vx, Vy, Vz, Vprof)
-        Vx_o .= Vx; Vy_o .= Vy, Vz_o .= Vz; C_o .= C
+        Vx_o .= Vx; Vy_o .= Vy; Vz_o .= Vz; C_o .= C
         @parallel advect!(Vx,Vx_o,Vy,Vy_o,Vz,Vz_o,C,C_o,dt,dx,dy,dz)
         if do_vis && it % nvis == 0
             p1=heatmap(xc,yc,Array(Pr)';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Pr")
@@ -190,7 +190,7 @@ end
 end
 
 @parallel_indices (iy,iz) function bc_xV!(A, V)
-    A[1  , iy, iz] = V[iy, iz]
+    A[1  , iy, iz] = V
     A[end, iy, iz] = A[end-1, iy, iz]
     return
 end
@@ -203,20 +203,20 @@ end
 
 
 function set_bc_Vel!(Vx, Vy, Vz, Vprof)
-    @parallel bc_y!(Vx)
-    @parallel bc_y!(Vz)
-    @parallel bc_x!(Vy)
-    @parallel bc_x!(Vz)
-    @parallel bc_z!(Vx)
-    @parallel bc_z!(Vy)
-    @parallel bc_xV!(Vx, Vprof)
+    @parallel (1:size(Vx,2),1:size(Vx,3)) bc_xV!(Vx, Vprof)
+    @parallel (1:size(Vx,1),1:size(Vx,3)) bc_y!(Vx)
+    @parallel (1:size(Vx,1),1:size(Vx,2)) bc_z!(Vx)
+    @parallel (1:size(Vy,2),1:size(Vy,3)) bc_x!(Vy)
+    @parallel (1:size(Vy,1),1:size(Vy,2)) bc_z!(Vy)
+    @parallel (1:size(Vz,2),1:size(Vz,3)) bc_x!(Vz)
+    @parallel (1:size(Vz,1),1:size(Vz,3)) bc_y!(Vz)
     return
 end
 
 function set_bc_Pr!(Pr, val)
-    @parallel bc_y!(Pr)
-    @parallel bc_z!(Pr)
-    @parallel bc_xval!(Pr, val)
+    @parallel (1:size(Pr,1),1:size(Pr,3)) bc_y!(Pr)
+    @parallel (1:size(Pr,1),1:size(Pr,2)) bc_z!(Pr)
+    @parallel (1:size(Pr,2),1:size(Pr,3)) bc_xval!(Pr, val)
     return
 end
 
@@ -250,13 +250,14 @@ end
     end
     if iz > 1 && iz < size(Vz,3) && ix <= size(Vz,1) && iy <= size(Vz,2)
         vxc      = 0.25*(Vx_o[ix,iy,iz-1]+Vx_o[ix+1,iy,iz-1]+Vx_o[ix,iy,iz]+Vx_o[ix+1,iy,iz])
-        vyc      = 0.25*(Vy_o[ix,iy-1,iz]+Vy_o[ix,iy+1,iz-1]+Vy_o[ix,iy,iz]+Vy_o[ix,iy+1,iz])
+        vyc      = 0.25*(Vy_o[ix,iy,iz-1]+Vy_o[ix,iy+1,iz-1]+Vy_o[ix,iy,iz]+Vy_o[ix,iy+1,iz])
         vzc      = Vz_o[ix,iy,iz]
         backtrack!(Vy,Vy_o,vxc,vyc,vzc,dt,dx,dy,dz,ix,iy,iz)
     end
     if checkbounds(Bool,C,ix,iy,iz)
-        vxc      = 0.5*(Vx_o[ix,iy]+Vx_o[ix+1,iy])
-        vyc      = 0.5*(Vy_o[ix,iy]+Vy_o[ix,iy+1])
+        vxc      = 0.5*(Vx_o[ix,iy,iz]+Vx_o[ix+1,iy,iz])
+        vyc      = 0.5*(Vy_o[ix,iy,iz]+Vy_o[ix,iy+1,iz])
+        vzc      = 0.5*(Vz_o[ix,iy,iz]+Vz_o[ix,iy,iz+1])
         backtrack!(C,C_o,vxc,vyc,vzc,dt,dx,dy,dz,ix,iy,iz)
     end
     return
