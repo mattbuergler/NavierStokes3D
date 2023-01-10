@@ -86,6 +86,22 @@ using MAT, Plots
     Vy[1,:,:] .= Vprof
     Pr        .= .-(zc'.-lz/2).*ρ.*g
     if do_save !ispath("./out_vis") && mkdir("./out_vis"); matwrite("out_vis/step_0.mat",Dict("Pr"=>Array(Pr),"Vx"=>Array(Vx),"Vy"=>Array(Vy),"Vy"=>Array(Vz),"C"=>Array(C),"dx"=>dx,"dy"=>dy,"dz"=>dz)) end
+    if do_vis
+        ENV["GKSwstype"]="nul"
+        if isdir("viz3D_out")==false mkdir("viz3D_out") end
+        loadpath = "viz3D_out/"; anim = Animation(loadpath,String[])
+        println("Animation directory: $(anim.dir)")
+        iframe = 0
+        p1=heatmap(xc,yc,Array(Pr)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Pr")
+        p3=heatmap(xc,yc,Array(C)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="C")
+        p4=heatmap(xv,yc,Array(Vx)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Vx")
+        p5=heatmap(xc,yv,Array(Vy)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Vy")
+        png(p1,@sprintf("viz3D_out/porous_convection3D_Pr_%04d.png",iframe))
+        png(p3,@sprintf("viz3D_out/porous_convection3D_C_%04d.png",iframe))
+        png(p4,@sprintf("viz3D_out/porous_convection3D_Vx_%04d.png",iframe))
+        png(p5,@sprintf("viz3D_out/porous_convection3D_Vy_%04d.png",iframe))
+        iframe+=1
+    end
     # action
     for it = 1:nt
         err_evo = Float64[]; iter_evo = Float64[]
@@ -112,11 +128,17 @@ using MAT, Plots
         Vx_o .= Vx; Vy_o .= Vy; Vz_o .= Vz; C_o .= C
         @parallel advect!(Vx,Vx_o,Vy,Vy_o,Vz,Vz_o,C,C_o,dt,dx,dy,dz)
         if do_vis && it % nvis == 0
-            p1=heatmap(xc,yc,Array(Pr)';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Pr")
+            p1=heatmap(xc,yc,Array(Pr)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Pr")
             p2=plot(iter_evo,err_evo;yscale=:log10)
-            p3=heatmap(xc,yc,Array(C)';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="C")
-            p4=heatmap(xc,yv,Array(Vy)';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Vy")
-            display(plot(p1,p2,p3,p4))
+            p3=heatmap(xc,yc,Array(C)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="C")
+            p4=heatmap(xv,yc,Array(Vx)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Vx")
+            p5=heatmap(xc,yv,Array(Vy)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),title="Vy")
+            png(p1,@sprintf("viz3D_out/porous_convection3D_Pr_%04d.png",iframe))
+            png(p2,@sprintf("viz3D_out/porous_convection3D_iter_%04d.png",iframe))
+            png(p3,@sprintf("viz3D_out/porous_convection3D_C_%04d.png",iframe))
+            png(p4,@sprintf("viz3D_out/porous_convection3D_Vx_%04d.png",iframe))
+            png(p5,@sprintf("viz3D_out/porous_convection3D_Vy_%04d.png",iframe))
+            iframe+=1
         end
         if do_save && it % nsave == 0
             matwrite("out_vis/step_$it.mat",Dict("Pr"=>Array(Pr),"Vx"=>Array(Vx),"Vy"=>Array(Vy),"Vz"=>Array(Vz),"C"=>Array(C),"dx"=>dx,"dy"=>dy,"dz"=>dz))
@@ -227,9 +249,14 @@ end
     iz1          = clamp(floor(Int,iz-δz),1,size(A,3))
     ix2,iy2,iz2  = clamp(ix1+1,1,size(A,1)),clamp(iy1+1,1,size(A,2)),clamp(iz1+1,1,size(A,3))
     δx = (δx>0) - (δx%1); δy = (δy>0) - (δy%1); δz = (δz>0) - (δz%1)
-    fx1          = lerp(A_o[ix1,iy1,iz1],A_o[ix2,iy1,iz1],δx)
-    fx2          = lerp(A_o[ix1,iy2,iz2],A_o[ix2,iy2,iz2],δx)
-    A[ix,iy,iz]  = lerp(fx1,fx2,δy)
+    # trilinear interpolation
+    fy1z1        = lerp(A_o[ix1,iy1,iz1],A_o[ix2,iy1,iz1],δx)
+    fy1z2        = lerp(A_o[ix1,iy1,iz2],A_o[ix2,iy1,iz2],δx)
+    fy2z1        = lerp(A_o[ix1,iy2,iz1],A_o[ix2,iy2,iz1],δx)
+    fy2z2        = lerp(A_o[ix1,iy2,iz2],A_o[ix2,iy2,iz2],δx)
+    fz1          = lerp(fy1z1,fy2z1,δy)
+    fz2          = lerp(fy1z2,fy2z2,δy)
+    A[ix,iy,iz]  = lerp(fz1,fz2,δz)
     return
 end
 
