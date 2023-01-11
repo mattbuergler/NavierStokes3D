@@ -1,4 +1,4 @@
-const USE_GPU = false
+const USE_GPU = true
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
@@ -27,19 +27,16 @@ using MAT, Plots
     c_lx      = 0.05   # rad/lx
     ox_lx     = 0.05
     oy_lx     = -0.4
-    oz_lx     = -0.4
     β         = 0*π/6
     ## dimensionally dependent
     ly        = ly_lx*lx
     lz        = lz_lx*lx
     ox        = ox_lx*lx
     oy        = oy_lx*lx
-    oz        = oz_lx*lx
     μ         = 1/Re*ρ*vin*lx
     g         = 1/Fr^2*vin^2/lx
     a2        = (a_lx*lx)^2
     b2        = (b_lx*lx)^2
-    c2        = (c_lx*lx)^2
     sinβ,cosβ = sincos(β)
     # numerics
     nx        = 255
@@ -107,7 +104,7 @@ using MAT, Plots
         err_evo = Float64[]; iter_evo = Float64[]
         @parallel update_τ!(τxx,τyy,τzz,τxy,τxz,τyz,Vx,Vy,Vz,μ,dx,dy,dz)
         @parallel predict_V!(Vx,Vy,Vz,τxx,τyy,τzz,τxy,τxz,τyz,ρ,g,dt,dx,dy,dz)
-        @parallel set_sphere!(C,Vx,Vy,Vz,a2,b2,c2,ox,oy,oz,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
+        @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
         @parallel update_∇V!(∇V,Vx,Vy,Vz,dx,dy,dz)
         println("#it = $it")
         for iter = 1:niter
@@ -123,7 +120,7 @@ using MAT, Plots
             end
         end
         @parallel correct_V!(Vx,Vy,Vz,Pr,dt,ρ,dx,dy,dz)
-        @parallel set_sphere!(C,Vx,Vy,Vz,a2,b2,c2,ox,oy,oz,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
+        @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
         set_bc_Vel!(Vx, Vy, Vz, Vprof)
         Vx_o .= Vx; Vy_o .= Vy; Vz_o .= Vz; C_o .= C
         @parallel advect!(Vx,Vx_o,Vy,Vy_o,Vz,Vz_o,C,C_o,dt,dx,dy,dz)
@@ -290,38 +287,34 @@ end
     return
 end
 
-@parallel_indices (ix,iy,iz) function set_sphere!(C,Vx,Vy,Vz,a2,b2,c2,ox,oy,oz,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
+@parallel_indices (ix,iy,iz) function set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
     xv,yv,zv = (ix-1)*dx - lx/2, (iy-1)*dy - ly/2, (iz-1)*dz - lz/2
     xc,yc,zc = xv+dx/2, yv+dx/2, zv+dz/2
     if checkbounds(Bool,C,ix,iy,iz)
         xr = (xc-ox)*cosβ - (yc-oy)*sinβ
         yr = (xc-ox)*sinβ + (yc-oy)*cosβ
-        zr = (zc-oz)
-        if xr*xr/a2 + yr*yr/b2 + zr*zr/c2 < 1.05
+        if xr*xr/a2 + yr*yr/b2 < 1.05
             C[ix,iy,iz] = 1.0
         end
     end
     if checkbounds(Bool,Vx,ix,iy,iz)
         xr = (xv-ox)*cosβ - (yc-oy)*sinβ
         yr = (xv-ox)*sinβ + (yc-oy)*cosβ
-        zr = (zc-oz)
-        if xr*xr/a2 + yr*yr/b2 + zr*zr/c2  < 1.0
+        if xr*xr/a2 + yr*yr/b2 < 1.0
             Vx[ix,iy,iz] = 0.0
         end
     end
     if checkbounds(Bool,Vy,ix,iy,iz)
         xr = (xc-ox)*cosβ - (yv-oy)*sinβ
         yr = (xc-ox)*sinβ + (yv-oy)*cosβ
-        zr = (zc-oz)
-        if xr*xr/a2 + yr*yr/b2 + zr*zr/c2  < 1.0
+        if xr*xr/a2 + yr*yr/b2 < 1.0
             Vy[ix,iy,iz] = 0.0
         end
     end
     if checkbounds(Bool,Vz,ix,iy,iz)
-        xr = (xc-ox)*cosβ - (yv-oy)*sinβ
-        yr = (xc-ox)*sinβ + (yv-oy)*cosβ
-        zr = (zc-oz)
-        if xr*xr/a2 + yr*yr/b2 + zr*zr/c2  < 1.0
+        xr = (xc-ox)*cosβ - (yc-oy)*sinβ
+        yr = (xc-ox)*sinβ + (yc-oy)*cosβ
+        if xr*xr/a2 + yr*yr/b2 < 1.0
             Vz[ix,iy,iz] = 0.0
         end
     end
