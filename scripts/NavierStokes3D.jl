@@ -9,7 +9,7 @@ end
 using LinearAlgebra, Printf
 using MAT, Plots
 
-@views function runme(; do_vis=true, do_save=false)
+@views function runme(; do_vis=true, do_save=true)
     # physics
     ## dimensionally independent
     lx        = 1.0 # [m]
@@ -25,8 +25,8 @@ using MAT, Plots
     a_lx      = 0.05   # rad/lx
     b_lx      = 0.05   # rad/lx
     c_lx      = 0.05   # rad/lx
-    ox_lx     = 0.05
-    oy_lx     = -0.4
+    ox_lx     = -0.4
+    oy_lx     = 0.01
     β         = 0*π/6
     ## dimensionally dependent
     ly        = ly_lx*lx
