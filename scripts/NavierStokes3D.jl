@@ -49,7 +49,7 @@ using MAT, Plots
     niter     = 50*max(ny,nz)
     nchk      = 1*(ny-1)
     nvis      = 10
-    nt        = 10
+    nt        = 10000
     nsave     = 10
     CFLτ      = 1.0/sqrt(3.1)
     CFL_visc  = 1/4.1
@@ -85,7 +85,7 @@ using MAT, Plots
     Vprof      = vin
     Vy[1,:,:] .= Vprof
     Pr        .= .-(zc'.-lz/2).*ρ.*g
-    if do_save !ispath("./out_vis") && mkdir("./out_vis"); matwrite("out_vis/step_0.mat",Dict("Pr"=>Array(Pr),"Vx"=>Array(Vx),"Vy"=>Array(Vy),"Vy"=>Array(Vz),"C"=>Array(C),"dx"=>dx,"dy"=>dy,"dz"=>dz)) end
+    if do_save !ispath("./out_save") && mkdir("./out_save"); matwrite("out_save/step_0.mat",Dict("Pr"=>Array(Pr),"Vx"=>Array(Vx),"Vy"=>Array(Vy),"Vy"=>Array(Vz),"C"=>Array(C),"dx"=>dx,"dy"=>dy,"dz"=>dz)) end
     if do_vis
         ENV["GKSwstype"]="nul"
         if isdir("viz3D_out")==false mkdir("viz3D_out") end
@@ -141,7 +141,7 @@ using MAT, Plots
             iframe+=1
         end
         if do_save && it % nsave == 0
-            matwrite("out_vis/step_$it.mat",Dict("Pr"=>Array(Pr),"Vx"=>Array(Vx),"Vy"=>Array(Vy),"Vz"=>Array(Vz),"C"=>Array(C),"dx"=>dx,"dy"=>dy,"dz"=>dz))
+            matwrite("out_save/step_$it.mat",Dict("Pr"=>Array(Pr),"Vx"=>Array(Vx),"Vy"=>Array(Vy),"Vz"=>Array(Vz),"C"=>Array(C),"dx"=>dx,"dy"=>dy,"dz"=>dz))
         end
     end
     return

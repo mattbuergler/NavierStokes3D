@@ -45,8 +45,8 @@ using MAT, Plots
     εit       = 1e-3                # convergence criterion
     niter     = 50*max(ny,nz)       # number of iterations
     nchk      = 1*(ny-1)            # number of iterations before checking residuals
-    nvis      = 1                   # number of iterations before visualization
-    nt        = 1000                # number of time steps
+    nvis      = 10                  # number of iterations before visualization
+    nt        = 10000               # number of time steps
     nsave     = 10                  # number of iterations before saving results
     CFLτ      = 1.0/sqrt(3.1)       # CFL-number for pseudo-transient solver of Poisson equation
     CFL_visc  = 1/4.1               # CFL-number for diffusion
