@@ -284,23 +284,14 @@ end
     Vz_o      = @zeros(nx  ,ny  ,nz+1)  # Vertical velocity (old)
     ∇V        = @zeros(nx  ,ny  ,nz  )  # Velocity gradient
     Rp        = @zeros(nx-2,ny-2,nz-2)  # Residuals of pressure
-    xc,yc,zc  = LinRange(-(lx-dx)/2,(lx-dx)/2,nx_g()  ),LinRange(-(ly-dy)/2,(ly-dy)/2,ny_g()  ),LinRange(-(lz-dz)/2,(lz-dz)/2,nz_g()  )  # cell center coordinated (e.g. for pressure and concentration)
-    xv,yv,zv  = LinRange(-lx/2     ,lx/2     ,nx_g()+1),LinRange(-ly/2     ,ly/2     ,ny_g()+1),LinRange(-lz/2     ,lz/2     ,nz_g()+1)  # staggered grid coordinated for velocity fields
-    xc_g      = Data.Array([x_g(ix,dx,C ) - (lx-dx)/2 for ix=1:size(C ,1)])
-    yc_g      = Data.Array([y_g(iy,dy,C ) - (ly-dy)/2 for iy=1:size(C ,2)])
-    zc_g      = Data.Array([z_g(iz,dz,C ) - (lz-dz)/2 for iz=1:size(C ,3)])
-    xv_g      = Data.Array([x_g(ix,dx,Vx) - (lx-dx)/2 for ix=1:size(Vx,1)])
-    yv_g      = Data.Array([y_g(iy,dy,Vy) - (ly-dy)/2 for iy=1:size(Vy,2)])
-    zv_g      = Data.Array([z_g(iz,dz,Vz) - (lz-dz)/2 for iz=1:size(Vz,3)])
+    # define global coordinates for intial and boundary conditions
     xco_g     = x_g(1   ,dx,C ) - (lx-dx)/2
     yco_g     = y_g(1   ,dy,C ) - (ly-dy)/2
     zco_g     = z_g(1   ,dz,C ) - (lz-dz)/2
     xvo_g     = x_g(1   ,dx,Vx) - (lx-dx)/2
     xve_g     = x_g(nx+1,dx,Vx)- (lx-dx)/2
-    @show xvo_g
-    @show xve_g
     # initialization
-    Vy[1,:,:] .= vin                                                              # set constant velocity at inflow boundary
+    Vy[1,:,:] .= vin  # set constant velocity at inflow boundary
     Pr         = Data.Array([-(z_g(iz,dz,C )-dz/2)*ρ*g + 0*yc[iy] + 0*zc[ix] for ix=1:size(C ,1),iy=1:size(C ,2),iz=1:size(C ,3)]) # set hydrostatic pressure
     update_halo!(Pr)
     @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz)   # set boundary conditions at cylinder
