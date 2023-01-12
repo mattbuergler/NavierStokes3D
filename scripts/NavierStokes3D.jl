@@ -284,6 +284,7 @@ end
     Vz_o      = @zeros(nx  ,ny  ,nz+1)  # Vertical velocity (old)
     ∇V        = @zeros(nx  ,ny  ,nz  )  # Velocity gradient
     Rp        = @zeros(nx-2,ny-2,nz-2)  # Residuals of pressure
+    xc,yc,zc  = LinRange(-(lx-dx)/2,(lx-dx)/2,nx),LinRange(-(ly-dy)/2,(ly-dy)/2,ny),LinRange(-(lz-dz)/2,(lz-dz)/2,nz)  # cell center coordinated (e.g. for pressure and concentration)
     # define global coordinates for intial and boundary conditions
     xco_g     = x_g(1   ,dx,C ) - (lx-dx)/2
     yco_g     = y_g(1   ,dy,C ) - (ly-dy)/2
@@ -292,7 +293,7 @@ end
     xve_g     = x_g(nx+1,dx,Vx)- (lx-dx)/2
     # initialization
     Vy[1,:,:] .= vin  # set constant velocity at inflow boundary
-    Pr         = Data.Array([-(z_g(iz,dz,C )-dz/2)*ρ*g + 0*yc[iy] + 0*zc[ix] for ix=1:size(C ,1),iy=1:size(C ,2),iz=1:size(C ,3)]) # set hydrostatic pressure
+    Pr         = Data.Array([-(z_g(iz,dz,C )-dz/2)*ρ*g + 0*yc[iy] + 0*zc[iz] for ix=1:size(C ,1),iy=1:size(C ,2),iz=1:size(C ,3)]) # set hydrostatic pressure
     update_halo!(Pr)
     @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz)   # set boundary conditions at cylinder
     update_halo!(C,Vx,Vy,Vz)
@@ -318,7 +319,8 @@ end
     Vx_inn = zeros(nx-1, ny-2, nz-2)                       # no halo local array for visu
     Vy_inn = zeros(nx-2, ny-1, nz-2)                       # no halo local array for visu
     Vz_inn = zeros(nx-2, ny-2, nz-1)                       # no halo local array for visu
-
+    @show size(Vx_inn)
+    @show size(Vx_v)
     # gathering global arrays
     C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
     Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)

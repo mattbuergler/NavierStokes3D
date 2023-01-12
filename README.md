@@ -4,6 +4,12 @@
 # NavierStokes3D
 NavierStokes3D is a solver for the incompressible 3D Navier Stokes equations. The code can be run both on multi-core CPUs or and GPUs enabled by making use of the [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) library, or even on multiple GPUs by making use of [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl). For time reasons und due encountered instabilities, the current version does not feature a turbulence model. An integration of a turbulence model to solve the Reynolds-Averaged Navier Stokes (RANS) equations, as well as a interface-tracking method such as Level-Set may be integrated at a later point.
 
+The code can be run with:
+
+```bash
+julia -O3 --check-bounds=no scripts/NavierStokes3D.jl
+```
+
 ## Mathematical model
 The incompressible 3D Navier Stokes equations are defined as
 
