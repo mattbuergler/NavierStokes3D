@@ -2,6 +2,14 @@
 ![Run Literate](https://github.com/mattbuergler/NavierStokes3D/actions/workflows/Literate.yml/badge.svg)
 
 # NavierStokes3D
+
+1. [Introduction](#introduction)
+2. [Mathematical model](#mathematical-model)
+3. [Numerical model](#numerical-model)
+4. [Test case](#test-case)
+4. [Known bugs](#known-bugs)
+
+## Introduction
 NavierStokes3D is a solver for the incompressible 3D Navier Stokes equations. The code can be run both on multi-core CPUs or and GPUs enabled by making use of the [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) library, or even on multiple GPUs by making use of [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl). For time reasons und due encountered instabilities, the current version does not feature a turbulence model. An integration of a turbulence model to solve the Reynolds-Averaged Navier Stokes (RANS) equations, as well as a interface-tracking method such as Level-Set may be integrated at a later point. The development of this code was inspired by [NavierStokes.jl](https://github.com/utkinis/NavierStokes.jl) and therefore may exhibit similarities or common code parts. The main contribution of this repository is the extension to 3D and to a multi-GPU code.
 
 The code can be run with:
@@ -47,7 +55,7 @@ In a final step, the velocity at the new time step is obtained with an advection
 $$\frac{\boldsymbol{u}^{n+1} - \boldsymbol{u}^{**} }{\Delta t} = - \left(\boldsymbol{u}^{**} \cdot \nabla \right)\boldsymbol{u}^{**}$$
 
 
-## Tests
+## Test case
 The solver was applied for solving a test case consisting of flow around a cylinder on a grid of 255x153x153 grid cells.
 
 The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at z = 0.5*lz are visualized in Figures 1 to 5.
@@ -85,5 +93,6 @@ The tracer concentration, the streamwise, transversal and vertical velocity fiel
 *Figure 10: Velocity field $p$ of the flow around a cylinder.*
 
 ## Known bugs:
+ - Outflow boundary condition becomes unstable at one point
  - Automated docu generation fails due to inline function backtrack!(..)
  - CI fails
