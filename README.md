@@ -50,6 +50,39 @@ $$\frac{\boldsymbol{u}^{n+1} - \boldsymbol{u}^{**} }{\Delta t} = - \left(\boldsy
 ## Tests
 The solver was applied for solving a test case consisting of flow around a cylinder on a grid of 255x153x153 grid cells.
 
+The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at z = 0.5*lz are visualized in Figures 1 to 5.
+
+![Figure 1](docs/porous_convection3D_xy_C.gif)  
+*Figure 1: Tracer transport with by flow around a cylinder.*
+
+![Figure 2](docs/porous_convection3D_xy_Vx.gif)  
+*Figure 2: Velocity field $Vx$ of the flow around a cylinder.*
+
+![Figure 3](docs/porous_convection3D_xy_Vy.gif)  
+*Figure 3: Velocity field $Vy$ of the flow around a cylinder.*
+
+![Figure 4](docs/porous_convection3D_xy_Vz.gif)  
+*Figure 4: Velocity field $Vz$ of the flow around a cylinder.*
+
+![Figure 5](docs/porous_convection3D_xy_Pr.gif)  
+*Figure 5: Velocity field $p$ of the flow around a cylinder.*
+
+The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at y = 0.5*ly are visualized in Figures 6 to 10.
+
+![Figure 6](docs/porous_convection3D_xy_C.gif)  
+*Figure 6: Tracer transport with by flow around a cylinder.*
+
+![Figure 7](docs/porous_convection3D_xy_Vx.gif)  
+*Figure 7: Velocity field $Vx$ of the flow around a cylinder.*
+
+![Figure 8](docs/porous_convection3D_xy_Vy.gif)  
+*Figure 8: Velocity field $Vy$ of the flow around a cylinder.*
+
+![Figure 9](docs/porous_convection3D_xy_Vz.gif)  
+*Figure 9: Velocity field $Vz$ of the flow around a cylinder.*
+
+![Figure 10](docs/porous_convection3D_xy_Pr.gif)  
+*Figure 10: Velocity field $p$ of the flow around a cylinder.*
 
 ## Known bugs:
  - Automated docu generation fails due to inline function backtrack!(..)
