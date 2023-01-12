@@ -91,35 +91,39 @@ end
     return nothing
 end
 
-@parallel_indices (iy,iz) function bc_xV!(A, V)
+@parallel_indices (iy,iz) function bc_x_Vx!(A, V)
     A[1  , iy, iz] = V
-    A[end, iy, iz] = A[end-1, iy, iz]
     return nothing
 end
 
-@parallel_indices (iy,iz) function bc_xval!(A, val)
-    A[1  , iy, iz] = A[2, iy, iz]
+@parallel_indices (iy,iz) function bc_x_Pr!(A, val)
     A[end, iy, iz] = val
     return nothing
 end
 
 
-function set_bc_Vel!(Vx, Vy, Vz, vin)
-    @parallel (1:size(Vx,2),1:size(Vx,3)) bc_xV!(Vx, vin)
+function set_bc_Vel!(Vx, Vy, Vz, xvo_g, lx, vin)
+    @parallel (1:size(Vx,2),1:size(Vx,3)) bc_x!(Vx)
     @parallel (1:size(Vx,1),1:size(Vx,3)) bc_y!(Vx)
     @parallel (1:size(Vx,1),1:size(Vx,2)) bc_z!(Vx)
     @parallel (1:size(Vy,2),1:size(Vy,3)) bc_x!(Vy)
     @parallel (1:size(Vy,1),1:size(Vy,2)) bc_z!(Vy)
     @parallel (1:size(Vz,2),1:size(Vz,3)) bc_x!(Vz)
     @parallel (1:size(Vz,1),1:size(Vz,3)) bc_y!(Vz)
+    if xvo_g == -lx/2
+        @parallel (1:size(Vx,2),1:size(Vx,3)) bc_x_Vx!(Vx, vin)
+    end
     update_halo!(Vx,Vy,Vz)
     return nothing
 end
 
-function set_bc_Pr!(Pr, val)
+function set_bc_Pr!(Pr, xve_g, lx, val)
+    @parallel (1:size(Pr,2),1:size(Pr,3)) bc_x!(Pr)
     @parallel (1:size(Pr,1),1:size(Pr,3)) bc_y!(Pr)
     @parallel (1:size(Pr,1),1:size(Pr,2)) bc_z!(Pr)
-    @parallel (1:size(Pr,2),1:size(Pr,3)) bc_xval!(Pr, val)
+    if xve_g == lx/2
+        @parallel (1:size(Pr,2),1:size(Pr,3)) bc_x_Pr!(Pr, val)
+    end
     update_halo!(Pr)
     return nothing
 end
@@ -172,9 +176,9 @@ end
     return nothing
 end
 
-@parallel_indices (ix,iy,iz) function set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,lx,ly,lz,dx,dy,dz)
-    xv,yv,zv = (ix-1)*dx - lx/2, (iy-1)*dy - ly/2, (iz-1)*dz - lz/2
-    xc,yc,zc = xv+dx/2, yv+dx/2, zv+dz/2
+@parallel_indices (ix,iy,iz) function set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz)
+    xc,yc,zc = xco_g+(ix-1)*dx, yco_g+(iy-1)*dy, zco_g+(iz-1)*dz
+    xv,yv,zv = xc-dx/2, yc-dy/2, zc-dz/2
     if checkbounds(Bool,C,ix,iy,iz)
         xr = (xc-ox)*cosβ - (yc-oy)*sinβ
         yr = (xc-ox)*sinβ + (yc-oy)*cosβ
@@ -206,7 +210,7 @@ end
     return nothing
 end
 
-@views function runme(; do_vis=true, do_save=true)
+@views function run_navierstokes3D(; do_vis=false,do_save=false,do_print=false,nx=255,nt=10)
     # physics
     ## dimensionally independent
     lx        = 1.0         # streamwise dimension [m]
@@ -241,16 +245,16 @@ end
     sinβ,cosβ = sincos(β)                     # cylinder orientation [-]
 
     # numerics
-    nx        = 255                           # number of cells in streamwise direction
+    nx                                        # number of cells in streamwise direction
     ny        = ceil(Int,nx*ly_lx)            # number of cells in transversal direction
     nz        = ceil(Int,nx*lz_lx)            # number of cells in vertical direction
     me, dims  = init_global_grid(nx, ny, nz)  # init global grid and more
     b_width   = (8,8,4)                       # for comm / comp overlap
     εit       = 1e-3                          # convergence criterion
     niter     = 50*max(nx_g(),ny_g(),nz_g())  # number of iterations
-    nchk      = 1*(ny_g()-1)                    # number of iterations before checking residuals
+    nchk      = 1*(ny_g()-1)                  # number of iterations before checking residuals
     nvis      = 10                            # number of iterations before visualization
-    nt        = 1000                          # number of time steps
+    nt                                        # number of time steps
     nsave     = 10                            # number of iterations before saving results
     CFLτ      = 1.0/sqrt(3.1)                 # CFL-number for pseudo-transient solver of Poisson equation
     CFL_visc  = 1/4.1                         # CFL-number for diffusion
@@ -261,9 +265,6 @@ end
     dt        = min(CFL_visc*max(dx,dy,dz)^2*ρ/μ,CFL_adv*max(dx,dy,dz)/vin)   # time step
     damp      = 2/nx                                                          # camping coefficient
     dτ        = CFLτ*max(dx,dy,dz)                                            # pseudo-transient time step
-    xc,yc,zc  = LinRange(-(lx-dx)/2,(lx-dx)/2,nx_g()  ),LinRange(-(ly-dy)/2,(ly-dy)/2,ny_g()  ),LinRange(-(lz-dz)/2,(lz-dz)/2,nz_g()  )  # cell center coordinated (e.g. for pressure and concentration)
-    xv,yv,zv  = LinRange(-lx/2     ,lx/2     ,nx_g()+1),LinRange(-ly/2     ,ly/2     ,ny_g()+1),LinRange(-lz/2     ,lz/2     ,nz_g()+1)  # staggered grid coordinated for velocity fields
-
     # allocation
     Pr        = @zeros(nx  ,ny  ,nz  )  # Pressure
     dPrdτ     = @zeros(nx-2,ny-2,nz-2)  # time derivative of pressure
@@ -283,85 +284,97 @@ end
     Vz_o      = @zeros(nx  ,ny  ,nz+1)  # Vertical velocity (old)
     ∇V        = @zeros(nx  ,ny  ,nz  )  # Velocity gradient
     Rp        = @zeros(nx-2,ny-2,nz-2)  # Residuals of pressure
-
+    xc,yc,zc  = LinRange(-(lx-dx)/2,(lx-dx)/2,nx_g()  ),LinRange(-(ly-dy)/2,(ly-dy)/2,ny_g()  ),LinRange(-(lz-dz)/2,(lz-dz)/2,nz_g()  )  # cell center coordinated (e.g. for pressure and concentration)
+    xv,yv,zv  = LinRange(-lx/2     ,lx/2     ,nx_g()+1),LinRange(-ly/2     ,ly/2     ,ny_g()+1),LinRange(-lz/2     ,lz/2     ,nz_g()+1)  # staggered grid coordinated for velocity fields
+    xc_g      = Data.Array([x_g(ix,dx,C ) - (lx-dx)/2 for ix=1:size(C ,1)])
+    yc_g      = Data.Array([y_g(iy,dy,C ) - (ly-dy)/2 for iy=1:size(C ,2)])
+    zc_g      = Data.Array([z_g(iz,dz,C ) - (lz-dz)/2 for iz=1:size(C ,3)])
+    xv_g      = Data.Array([x_g(ix,dx,Vx) - (lx-dx)/2 for ix=1:size(Vx,1)])
+    yv_g      = Data.Array([y_g(iy,dy,Vy) - (ly-dy)/2 for iy=1:size(Vy,2)])
+    zv_g      = Data.Array([z_g(iz,dz,Vz) - (lz-dz)/2 for iz=1:size(Vz,3)])
+    xco_g     = x_g(1   ,dx,C ) - (lx-dx)/2
+    yco_g     = y_g(1   ,dy,C ) - (ly-dy)/2
+    zco_g     = z_g(1   ,dz,C ) - (lz-dz)/2
+    xvo_g     = x_g(1   ,dx,Vx) - (lx-dx)/2
+    xve_g     = x_g(nx+1,dx,Vx)- (lx-dx)/2
+    @show xvo_g
+    @show xve_g
     # initialization
     Vy[1,:,:] .= vin                                                              # set constant velocity at inflow boundary
-    Pr         = Data.Array([-(zc[iz]-lz/2)*ρ*g + 0*yc[iy] + 0*xc[ix] for ix=1:nx_g(),iy=1:ny_g(),iz=1:nz_g()]) # set hydrostatic pressure
+    Pr         = Data.Array([-(z_g(iz,dz,C )-dz/2)*ρ*g + 0*yc[iy] + 0*zc[ix] for ix=1:size(C ,1),iy=1:size(C ,2),iz=1:size(C ,3)]) # set hydrostatic pressure
     update_halo!(Pr)
-    @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,lx,ly,lz,dx,dy,dz)   # set boundary conditions at cylinder
+    @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz)   # set boundary conditions at cylinder
     update_halo!(C,Vx,Vy,Vz)
 
-    # Initialization for saving results and visualization
-    if do_save || do_vis
-        #init stuff
-        iframe = 0; it = 0
-        nx_v,ny_v,nz_v = (nx-2)*dims[1],(ny-2)*dims[2],(nz-2)*dims[3]
-        # inner points only
-        xci_g = LinRange(-lx/2+dx+dx/2, lx/2-dx-dx/2, nx_v)    # inner global coordinates
-        yci_g = LinRange(-ly/2+dy+dy/2, ly/2-dy-dy/2, ny_v)    # inner global coordinates
-        zci_g = LinRange(-lz/2+dz+dz/2, lz/2-dz-dz/2, nz_v)    # inner global coordinates
-        xvi_g = LinRange(-lx/2+dx     , lx/2-dx     , nx_v+1)  # inner global coordinates
-        yvi_g = LinRange(-ly/2+dy     , ly/2-dy     , ny_v+1)  # inner global coordinates
-        zvi_g = LinRange(-lz/2+dz     , lz/2-dz     , nz_v+1)  # inner global coordinates
-        C_v    = zeros(nx_v  , ny_v  , nz_v  )                 # global array for visu
-        Pr_v   = zeros(nx_v  , ny_v  , nz_v  )                 # global array for visu
-        Vx_v   = zeros(nx_v+1, ny_v  , nz_v  )                 # global array for visu
-        Vy_v   = zeros(nx_v  , ny_v+1, nz_v  )                 # global array for visu
-        Vz_v   = zeros(nx_v  , ny_v  , nz_v+1)                 # global array for visu
-        C_inn  = zeros(nx-2, ny-2, nz-2)                       # no halo local array for visu
-        Pr_inn = zeros(nx-2, ny-2, nz-2)                       # no halo local array for visu
-        Vx_inn = zeros(nx-1, ny-2, nz-2)                       # no halo local array for visu
-        Vy_inn = zeros(nx-2, ny-1, nz-2)                       # no halo local array for visu
-        Vz_inn = zeros(nx-2, ny-2, nz-1)                       # no halo local array for visu
+    # Initialization for saving results, visualization and return
+    #init stuff
+    iframe = 0; it = 0
+    nx_v,ny_v,nz_v = (nx-2)*dims[1],(ny-2)*dims[2],(nz-2)*dims[3]
+    # inner points only
+    xci_g = LinRange(-lx/2+dx+dx/2, lx/2-dx-dx/2, nx_v)    # inner global coordinates
+    yci_g = LinRange(-ly/2+dy+dy/2, ly/2-dy-dy/2, ny_v)    # inner global coordinates
+    zci_g = LinRange(-lz/2+dz+dz/2, lz/2-dz-dz/2, nz_v)    # inner global coordinates
+    xvi_g = LinRange(-lx/2+dx     , lx/2-dx     , nx_v+2)  # inner global coordinates
+    yvi_g = LinRange(-ly/2+dy     , ly/2-dy     , ny_v+2)  # inner global coordinates
+    zvi_g = LinRange(-lz/2+dz     , lz/2-dz     , nz_v+2)  # inner global coordinates
+    C_v    = zeros(nx_v  , ny_v  , nz_v  )                 # global array for visu and return
+    Pr_v   = zeros(nx_v  , ny_v  , nz_v  )                 # global array for visu and return
+    Vx_v   = zeros(nx_v+2, ny_v  , nz_v  )                 # global array for visu and return
+    Vy_v   = zeros(nx_v  , ny_v+2, nz_v  )                 # global array for visu and return
+    Vz_v   = zeros(nx_v  , ny_v  , nz_v+2)                 # global array for visu and return
+    C_inn  = zeros(nx-2, ny-2, nz-2)                       # no halo local array for visu
+    Pr_inn = zeros(nx-2, ny-2, nz-2)                       # no halo local array for visu
+    Vx_inn = zeros(nx-1, ny-2, nz-2)                       # no halo local array for visu
+    Vy_inn = zeros(nx-2, ny-1, nz-2)                       # no halo local array for visu
+    Vz_inn = zeros(nx-2, ny-2, nz-1)                       # no halo local array for visu
 
-        # gathering global arrays
-        C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
-        Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)
-        Vx_inn .= Array(Vx)[2:end-1,2:end-1,2:end-1]; gather!(Vx_inn, Vx_v)
-        Vy_inn .= Array(Vy)[2:end-1,2:end-1,2:end-1]; gather!(Vy_inn, Vy_v)
-        Vz_inn .= Array(Vz)[2:end-1,2:end-1,2:end-1]; gather!(Vz_inn, Vz_v)
-        if do_save
-            if me==0
-                !ispath("./out_save") && mkdir("./out_save");
-                # save initial conditions
-                save_array(@sprintf("out_save/out_C_v_%04d" ,iframe),convert.(Float32,C_v ))
-                save_array(@sprintf("out_save/out_Pr_v_%04d",iframe),convert.(Float32,Pr_v))
-                save_array(@sprintf("out_save/out_Vx_v_%04d",iframe),convert.(Float32,Vx_v))
-                save_array(@sprintf("out_save/out_Vy_v_%04d",iframe),convert.(Float32,Vy_v))
-                save_array(@sprintf("out_save/out_Vz_v_%04d",iframe),convert.(Float32,Vz_v))
-            end
+    # gathering global arrays
+    C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
+    Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)
+    Vx_inn .= Array(Vx)[2:end-1,2:end-1,2:end-1]; gather!(Vx_inn, Vx_v)
+    Vy_inn .= Array(Vy)[2:end-1,2:end-1,2:end-1]; gather!(Vy_inn, Vy_v)
+    Vz_inn .= Array(Vz)[2:end-1,2:end-1,2:end-1]; gather!(Vz_inn, Vz_v)
+    if do_save
+        if me==0
+            !ispath("./out_save") && mkdir("./out_save");
+            # save initial conditions
+            save_array(@sprintf("out_save/out_C_v_%04d" ,iframe),convert.(Float32,C_v ))
+            save_array(@sprintf("out_save/out_Pr_v_%04d",iframe),convert.(Float32,Pr_v))
+            save_array(@sprintf("out_save/out_Vx_v_%04d",iframe),convert.(Float32,Vx_v))
+            save_array(@sprintf("out_save/out_Vy_v_%04d",iframe),convert.(Float32,Vy_v))
+            save_array(@sprintf("out_save/out_Vz_v_%04d",iframe),convert.(Float32,Vz_v))
         end
-        # visualization
-        if do_vis
-            ENV["GKSwstype"]="nul"
-            if (me==0) if isdir("viz3D_out")==false mkdir("viz3D_out") end; loadpath = "viz3D_out/"; anim = Animation(loadpath,String[])
-            println("Animation directory: $(anim.dir)") end
-            # visualize initial conditions
-            # horizontal planes (x-y) at z = 0
-            p2  = heatmap(xci_g,yci_g,Array(Pr_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p3  = heatmap(xci_g,yci_g,Array(C_v )[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p4  = heatmap(xvi_g,yci_g,Array(Vx_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p5  = heatmap(xci_g,yvi_g,Array(Vy_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p6  = heatmap(xci_g,yci_g,Array(Vz_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            # vertical planes (x-z) at y = 0
-            p7  = heatmap(xci_g,zci_g,Array(Pr_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p8  = heatmap(xci_g,zci_g,Array(C_v )[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p10 = heatmap(xci_g,zci_g,Array(Vy_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            p11 = heatmap(xci_g,zvi_g,Array(Vz_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-            png(p2 ,@sprintf("viz3D_out/porous_convection3D_xy_Pr_%04d.png",iframe))
-            png(p3 ,@sprintf("viz3D_out/porous_convection3D_xy_C_%04d.png" ,iframe))
-            png(p4 ,@sprintf("viz3D_out/porous_convection3D_xy_Vx_%04d.png",iframe))
-            png(p5 ,@sprintf("viz3D_out/porous_convection3D_xy_Vy_%04d.png",iframe))
-            png(p6 ,@sprintf("viz3D_out/porous_convection3D_xy_Vz_%04d.png",iframe))
-            png(p7 ,@sprintf("viz3D_out/porous_convection3D_xz_Pr_%04d.png",iframe))
-            png(p8 ,@sprintf("viz3D_out/porous_convection3D_xz_C_%04d.png" ,iframe))
-            png(p9 ,@sprintf("viz3D_out/porous_convection3D_xz_Vx_%04d.png",iframe))
-            png(p10,@sprintf("viz3D_out/porous_convection3D_xz_Vy_%04d.png",iframe))
-            png(p11,@sprintf("viz3D_out/porous_convection3D_xz_Vz_%04d.png",iframe))
-        end
-        iframe+=1
     end
+    # visualization
+    if do_vis
+        ENV["GKSwstype"]="nul"
+        if (me==0) if isdir("viz3D_out")==false mkdir("viz3D_out") end; loadpath = "viz3D_out/"; anim = Animation(loadpath,String[])
+        if do_print println("Animation directory: $(anim.dir)") end end
+        # visualize initial conditions
+        # horizontal planes (x-y) at z = 0
+        p2  = heatmap(xci_g,yci_g,Array(Pr_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p3  = heatmap(xci_g,yci_g,Array(C_v )[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p4  = heatmap(xvi_g,yci_g,Array(Vx_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p5  = heatmap(xci_g,yvi_g,Array(Vy_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p6  = heatmap(xci_g,yci_g,Array(Vz_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        # vertical planes (x-z) at y = 0
+        p7  = heatmap(xci_g,zci_g,Array(Pr_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p8  = heatmap(xci_g,zci_g,Array(C_v )[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p10 = heatmap(xci_g,zci_g,Array(Vy_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        p11 = heatmap(xci_g,zvi_g,Array(Vz_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+        png(p2 ,@sprintf("viz3D_out/porous_convection3D_xy_Pr_%04d.png",iframe))
+        png(p3 ,@sprintf("viz3D_out/porous_convection3D_xy_C_%04d.png" ,iframe))
+        png(p4 ,@sprintf("viz3D_out/porous_convection3D_xy_Vx_%04d.png",iframe))
+        png(p5 ,@sprintf("viz3D_out/porous_convection3D_xy_Vy_%04d.png",iframe))
+        png(p6 ,@sprintf("viz3D_out/porous_convection3D_xy_Vz_%04d.png",iframe))
+        png(p7 ,@sprintf("viz3D_out/porous_convection3D_xz_Pr_%04d.png",iframe))
+        png(p8 ,@sprintf("viz3D_out/porous_convection3D_xz_C_%04d.png" ,iframe))
+        png(p9 ,@sprintf("viz3D_out/porous_convection3D_xz_Vx_%04d.png",iframe))
+        png(p10,@sprintf("viz3D_out/porous_convection3D_xz_Vy_%04d.png",iframe))
+        png(p11,@sprintf("viz3D_out/porous_convection3D_xz_Vz_%04d.png",iframe))
+    end
+    iframe+=1
     # action
     for it = 1:nt
         err_evo = Float64[]; iter_evo = Float64[]
@@ -369,29 +382,29 @@ end
         @parallel update_τ!(τxx,τyy,τzz,τxy,τxz,τyz,Vx,Vy,Vz,μ,dx,dy,dz)            # update viscous stress tensor
         update_halo!(τxx,τyy,τzz)
         @parallel predict_V!(Vx,Vy,Vz,τxx,τyy,τzz,τxy,τxz,τyz,ρ,g,dt,dx,dy,dz)      # predict intermediate velocity (only diffusion)
-        @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,lx,ly,lz,dx,dy,dz) # set boundary conditions at cylinder
+        @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz) # set boundary conditions at cylinder
         update_halo!(C,Vx,Vy,Vz)
         @parallel update_∇V!(∇V,Vx,Vy,Vz,dx,dy,dz)                                  # calculate divergence of velocity field
         update_halo!(∇V)
-        if me==0 println("#it = $it") end
+        if me==0 if do_print  println("#it = $it") end end
         # pseudo-transient solver for the Poisson equation of Pr(n+1)
         for iter = 1:niter
             @parallel update_dPrdτ!(Pr,dPrdτ,∇V,ρ,dt,dτ,damp,dx,dy,dz)              # update time derivative of Pr
             update_halo!(∇V)
             @parallel update_Pr!(Pr,dPrdτ,dτ)                                       # calculate pressure of pseudo-time step
             update_halo!(Pr)
-            set_bc_Pr!(Pr, 0.0)                                                     # set pressure boundary condition
+            set_bc_Pr!(Pr, xve_g, lx, 0.0)                                              # set pressure boundary condition
             if iter % nchk == 0
                 @parallel compute_res!(Rp,Pr,∇V,ρ,dt,dx,dy,dz)                      # calculate residuals
                 err = max_g(abs.(Rp))*ly^2/psc                                      # calculate maximum error
                 push!(err_evo, err); push!(iter_evo,iter/ny_g())
-                if me==0 @printf("  #iter = %d, err = %1.3e\n", iter, err) end
+                if me==0 if do_print @printf("  #iter = %d, err = %1.3e\n", iter, err) end end
                 if err < εit || !isfinite(err) break end
             end
         end
         @parallel correct_V!(Vx,Vy,Vz,Pr,dt,ρ,dx,dy,dz)                             # calculate new time velocity V(n+1)
-        @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,lx,ly,lz,dx,dy,dz) # set boundary conditions at cylinder
-        set_bc_Vel!(Vx, Vy, Vz, vin)                                                # set boundary conditions for velocity ad domain boundaries
+        @parallel set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz) # set boundary conditions at cylinder
+        set_bc_Vel!(Vx, Vy, Vz, xvo_g, lx, vin)                                                # set boundary conditions for velocity ad domain boundaries
         Vx_o .= Vx; Vy_o .= Vy; Vz_o .= Vz; C_o .= C
         @parallel advect!(Vx,Vx_o,Vy,Vy_o,Vz,Vz_o,C,C_o,dt,dx,dy,dz)                # finally run advection step using method of the characterics
         update_halo!(Vx,Vy,Vz)
@@ -407,17 +420,17 @@ end
                 if me==0
                     p1  = plot(iter_evo,err_evo;yscale=:log10)
                     # horizontal planes (x-y) at z = 0
-                    p2  = heatmap(xci_g,yci_g,Array(Pr_v)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p3  = heatmap(xci_g,yci_g,Array(C_v )[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p4  = heatmap(xvi_g,yci_g,Array(Vx_v)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p5  = heatmap(xci_g,yvi_g,Array(Vy_v)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p6  = heatmap(xci_g,yci_g,Array(Vz_v)[:,:,ceil(Int,nz/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p2  = heatmap(xci_g,yci_g,Array(Pr_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p3  = heatmap(xci_g,yci_g,Array(C_v )[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p4  = heatmap(xvi_g,yci_g,Array(Vx_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p5  = heatmap(xci_g,yvi_g,Array(Vy_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p6  = heatmap(xci_g,yci_g,Array(Vz_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     # vertical planes (x-z) at y = 0
-                    p7  = heatmap(xci_g,zci_g,Array(Pr_v)[:,ceil(Int,ny/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p8  = heatmap(xci_g,zci_g,Array(C_v )[:,ceil(Int,ny/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p10 = heatmap(xci_g,zci_g,Array(Vy_v)[:,ceil(Int,ny/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    p11 = heatmap(xci_g,zvi_g,Array(Vz_v)[:,ceil(Int,ny/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p7  = heatmap(xci_g,zci_g,Array(Pr_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p8  = heatmap(xci_g,zci_g,Array(C_v )[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p10 = heatmap(xci_g,zci_g,Array(Vy_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
+                    p11 = heatmap(xci_g,zvi_g,Array(Vz_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     png(p1 ,@sprintf("viz3D_out/porous_convection3D_iter_%04d.png" ,iframe))
                     png(p2 ,@sprintf("viz3D_out/porous_convection3D_xy_Pr_%04d.png",iframe))
                     png(p3 ,@sprintf("viz3D_out/porous_convection3D_xy_C_%04d.png" ,iframe))
@@ -443,8 +456,15 @@ end
             iframe+=1
         end
     end
+    # gather local arrays without halo for return call
+    C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
+    Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)
+    Vx_inn .= Array(Vx)[2:end-1,2:end-1,2:end-1]; gather!(Vx_inn, Vx_v)
+    Vy_inn .= Array(Vy)[2:end-1,2:end-1,2:end-1]; gather!(Vy_inn, Vy_v)
+    Vz_inn .= Array(Vz)[2:end-1,2:end-1,2:end-1]; gather!(Vz_inn, Vz_v)
+    C_v = Array(C_v); Pr_v = Array(Pr_v); Vx_v = Array(Vx_v); Vy_v = Array(Vy_v); Vz_v = Array(Vz_v)
     finalize_global_grid()
-    return
+    return C_v,Pr_v,Vx_v,Vy_v,Vz_v
 end
 
-runme(do_vis=true, do_save=true)
+run_navierstokes3D(do_vis=true, do_save=true, do_print=true, nx=63, nt=1000)
