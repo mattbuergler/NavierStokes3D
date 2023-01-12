@@ -1,6 +1,6 @@
 name = "NavierStokes3D"
+uuid = "c60aa3da-91c5-4bfc-bb46-fa7c550d4ac9"
 authors = ["Matthias Bürgler <buergler@gmx.ch>"]
-UUID("c60aa3da-91c5-4bfc-bb46-fa7c550d4ac9")
 version = "0.1.0"
 
 [deps]
