@@ -1,4 +1,4 @@
-const USE_GPU = false
+const USE_GPU = true
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
@@ -29,6 +29,10 @@ function save_array(Aname,A)
     out = open(fname,"w"); write(out,A); close(out)
 end
 
+"""
+    update_τ!(τxx,τyy,τzz,τxy,τxz,τyz,Vx,Vy,Vz,μ,dx,dy,dz)
+Update the stress tensor.
+"""
 @parallel function update_τ!(τxx,τyy,τzz,τxy,τxz,τyz,Vx,Vy,Vz,μ,dx,dy,dz)
     @all(τxx) = 2μ*(@d_xa(Vx)/dx - @∇V()/3.0)
     @all(τyy) = 2μ*(@d_ya(Vy)/dy - @∇V()/3.0)
@@ -39,6 +43,10 @@ end
     return nothing
 end
 
+"""
+    predict_V!(Vx,Vy,Vz,τxx,τyy,τzz,τxy,τxz,τyz,ρ,g,dt,dx,dy,dz)
+Calculate intermediate velocity as first step of Chorin's projection method.
+"""
 @parallel function predict_V!(Vx,Vy,Vz,τxx,τyy,τzz,τxy,τxz,τyz,ρ,g,dt,dx,dy,dz)
     @inn(Vx) = @inn(Vx) + dt/ρ*(@d_xi(τxx)/dx + @d_ya(τxy)/dy + @d_za(τxz)/dz      )
     @inn(Vy) = @inn(Vy) + dt/ρ*(@d_yi(τyy)/dy + @d_xa(τxy)/dx + @d_za(τyz)/dz      )
@@ -46,26 +54,46 @@ end
     return nothing
 end
 
+"""
+    update_∇V!(∇V,Vx,Vy,Vz,dx,dy,dz)
+Calculate the divergence of the velocity field.
+"""
 @parallel function update_∇V!(∇V,Vx,Vy,Vz,dx,dy,dz)
     @all(∇V) = @∇V()
     return nothing
 end
 
+"""
+    update_dPrdτ!(Pr,dPrdτ,∇V,ρ,dt,dτ,damp,dx,dy,dz)
+Calculate the time derivative of the pressure field in pseudo-time.
+"""
 @parallel function update_dPrdτ!(Pr,dPrdτ,∇V,ρ,dt,dτ,damp,dx,dy,dz)
     @all(dPrdτ) = @all(dPrdτ)*(1.0-damp) + dτ*(@d2_xi(Pr)/dx/dx + @d2_yi(Pr)/dy/dy + @d2_zi(Pr)/dz/dz - ρ/dt*@inn(∇V))
     return nothing
 end
 
+"""
+    update_Pr!(Pr,dPrdτ,dτ)
+Calculate the pressure at the new time step (second step of Chorin's projection method).
+"""
 @parallel function update_Pr!(Pr,dPrdτ,dτ)
     @inn(Pr) = @inn(Pr) + dτ*@all(dPrdτ)
     return nothing
 end
 
+"""
+    update_Pr!(Pr,dPrdτ,dτ)
+Calculate the residuals on the basis of the continuity constraint.
+"""
 @parallel function compute_res!(Rp,Pr,∇V,ρ,dt,dx,dy,dz)
     @all(Rp) = @d2_xi(Pr)/dx/dx + @d2_yi(Pr)/dy/dy  + @d2_zi(Pr)/dz/dz - ρ/dt*@inn(∇V)
     return nothing
 end
 
+"""
+    correct_V!(Vx,Vy,Vz,Pr,dt,ρ,dx,dy,dz)
+Calculate the velocity at a second intermediate time step based on the pressure values at the new time step.
+"""
 @parallel function correct_V!(Vx,Vy,Vz,Pr,dt,ρ,dx,dy,dz)
     @inn(Vx) = @inn(Vx) - dt/ρ*@d_xi(Pr)/dx
     @inn(Vy) = @inn(Vy) - dt/ρ*@d_yi(Pr)/dy
@@ -73,35 +101,58 @@ end
     return nothing
 end
 
+"""
+    bc_x!(A)
+Set zero-gradient boundary condition on y-z-planes boundaries.
+"""
 @parallel_indices (iy,iz) function bc_x!(A)
     A[1  , iy, iz] = A[2    , iy, iz]
     A[end, iy, iz] = A[end-1, iy, iz]
     return nothing
 end
 
+"""
+    bc_y!(A)
+Set zero-gradient boundary condition on x-z-planes boundaries.
+"""
 @parallel_indices (ix,iz) function bc_y!(A)
     A[ix, 1  , iz] = A[ix, 2    , iz]
     A[ix, end, iz] = A[ix, end-1, iz]
     return nothing
 end
 
+"""
+    bc_z!(A)
+Set zero-gradient boundary condition on x-y-planes boundaries.
+"""
 @parallel_indices (ix,iy) function bc_z!(A)
     A[ix, iy, 1  ] = A[ix, iy, 2    ]
     A[ix, iy, end] = A[ix, iy, end-1]
     return nothing
 end
 
+"""
+    bc_x_Vx!(A, V)
+Set fixed value inflow boundary condition on the Vx field on y-z-planes boundary at inlet.
+"""
 @parallel_indices (iy,iz) function bc_x_Vx!(A, V)
     A[1  , iy, iz] = V
     return nothing
 end
 
+"""
+    bc_x_Pr!(A, val)
+Set fixed value outflow boundary condition on the p field on y-z-planes boundary at outlet.
+"""
 @parallel_indices (iy,iz) function bc_x_Pr!(A, val)
     A[end, iy, iz] = val
     return nothing
 end
 
-
+"""
+    set_bc_Vel!(Vx, Vy, Vz, xvo_g, lx, vin)
+Set velocity boundary conditions on all boundaries.
+"""
 function set_bc_Vel!(Vx, Vy, Vz, xvo_g, lx, vin)
     @parallel (1:size(Vx,2),1:size(Vx,3)) bc_x!(Vx)
     @parallel (1:size(Vx,1),1:size(Vx,3)) bc_y!(Vx)
@@ -117,6 +168,10 @@ function set_bc_Vel!(Vx, Vy, Vz, xvo_g, lx, vin)
     return nothing
 end
 
+"""
+    set_bc_Pr!(Pr, xve_g, lx, val)
+Set pressure boundary conditions on all boundaries.
+"""
 function set_bc_Pr!(Pr, xve_g, lx, val)
     @parallel (1:size(Pr,2),1:size(Pr,3)) bc_x!(Pr)
     @parallel (1:size(Pr,1),1:size(Pr,3)) bc_y!(Pr)
@@ -128,6 +183,10 @@ function set_bc_Pr!(Pr, xve_g, lx, val)
     return nothing
 end
 
+"""
+    backtrack!(A,A_o,vxc,vyc,vzc,dt,dx,dy,dz,ix,iy,iz)
+Backtrack the field A along the characteristic lines.
+"""
 @inline function backtrack!(A,A_o,vxc,vyc,vzc,dt,dx,dy,dz,ix,iy,iz)
     δx,δy,δz     = dt*vxc/dx, dt*vyc/dy, dt*vzc/dz
     ix1          = clamp(floor(Int,ix-δx),1,size(A,1))
@@ -146,8 +205,16 @@ end
     return nothing
 end
 
+"""
+    lerp(a,b,t)
+Linear interpolation.
+"""
 @inline lerp(a,b,t) = b*t + a*(1-t)
 
+"""
+    advect!(Vx,Vx_o,Vy,Vy_o,Vz,Vz_o,C,C_o,dt,dx,dy,dz)
+Calculate velocity at the new time step considerung the advection step and using the method of characteristics and tri-linear interpolation.
+"""
 @parallel_indices (ix,iy,iz) function advect!(Vx,Vx_o,Vy,Vy_o,Vz,Vz_o,C,C_o,dt,dx,dy,dz)
     if ix > 1 && ix < size(Vx,1) && iy <= size(Vx,2) && iz <= size(Vx,3)
         vxc      = Vx_o[ix,iy,iz]
@@ -176,6 +243,10 @@ end
     return nothing
 end
 
+"""
+    set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz)
+Set internal boundary conditions on the cylinder.
+"""
 @parallel_indices (ix,iy,iz) function set_cylinder!(C,Vx,Vy,Vz,a2,b2,ox,oy,sinβ,cosβ,xco_g,yco_g,zco_g,lx,ly,lz,dx,dy,dz)
     xc,yc,zc = xco_g+(ix-1)*dx, yco_g+(iy-1)*dy, zco_g+(iz-1)*dz
     xv,yv,zv = xc-dx/2, yc-dy/2, zc-dz/2
@@ -210,6 +281,10 @@ end
     return nothing
 end
 
+"""
+    run_navierstokes3D(; do_vis=false,do_save=false,do_print=false,nx=255,nt=10)
+Run the incompressible 3D Navier Stokes equations.
+"""
 @views function run_navierstokes3D(; do_vis=false,do_save=false,do_print=false,nx=255,nt=10)
     # physics
     ## dimensionally independent
@@ -437,6 +512,7 @@ end
                     png(p11,@sprintf("viz3D_out/porous_convection3D_xz_Vz_%04d.png",iframe))
                 end
             end
+            # saving results
             if do_save && it % nsave == 0
                 if me==0
                     save_array(@sprintf("out_save/out_C_v_%04d" ,iframe),convert.(Float32,C_v ))
