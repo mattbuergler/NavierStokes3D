@@ -35,6 +35,6 @@ $$\frac{\partial p}{\partial \tau} + \Delta^2p^n = \frac{\rho}{\Delta t} \nabla 
 
 In a final step, the velocity at the new time step is obtained with an advection step solved with the method of characteristics:
 
-$$\frac{\boldsymbol{u}^{n+1} - \boldsymbol{u}^{**}}{\Delta t} = - \left(\boldsymbol{u}^{**} \cdot \nabla \right)\boldsymbol{u}^{**}$$
+$$\frac{\boldsymbol{u}^{n+1} - \boldsymbol{u}^{**} }{\Delta t} = - \left(\boldsymbol{u}^{**} \cdot \nabla \right)\boldsymbol{u}^{**}$$
 
 
