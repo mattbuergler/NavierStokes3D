@@ -1,6 +1,5 @@
 using Test
-using Test
-include("../scripts/PorousConvection_3D_xpu.jl")
+include("../scripts/NavierStokes3D.jl")
 
 # Unit tests for averaging functions
 @testset "Test average functions" begin
@@ -11,12 +10,13 @@ end
 
 # Reference tests
 # get the solution
-T = run_navierstokes3D(do_vis=true, do_save=true, do_print=false, nx=255, nt=1000)
+C,Pr,Vx,Vy,Vz = run_navierstokes3D(do_vis=false, do_save=false, do_print=true, nx=63, nt=1)
 # reference indices and solutions
 inds_x = [31 38 50 51]
 inds_y = [2 5 19 31]
 inds_z = [12 13 23 23]
-T_ref = [1.533238393934448e-7 1.528864051208823e-7 1.5339073726141464e-7 1.5343984486166758e-7;;;;
+@show Pr[inds_x,inds_y,inds_z]
+Pr = [1.533238393934448e-7 1.528864051208823e-7 1.5339073726141464e-7 1.5343984486166758e-7;;;;
          4.899815577977306e-7 1.5616085552454124e-7 1.5338275094223396e-7 1.534319424539255e-7;;;;
          0.19578294327792722 0.001261159687564842 1.5335773442293184e-7 1.534034099299091e-7;;;;
          1.533238393934448e-7 1.528864051208823e-7 1.5339073726141467e-7 1.5343984486166758e-7;;;;;;
