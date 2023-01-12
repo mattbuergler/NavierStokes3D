@@ -1,10 +1,12 @@
 name = "NavierStokes3D"
+uuid = "c60aa3da-91c5-4bfc-bb46-fa7c550d4ac9"
 authors = ["Matthias Bürgler <buergler@gmx.ch>"]
 version = "0.1.0"
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 ImplicitGlobalGrid = "4d7a3746-15be-11ea-1130-334b0c4f5fa0"
+Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 MAT = "23992714-dd62-5051-b70f-ba57cb901cac"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"

@@ -49,3 +49,8 @@ $$\frac{\boldsymbol{u}^{n+1} - \boldsymbol{u}^{**} }{\Delta t} = - \left(\boldsy
 
 ## Tests
 The solver was applied for solving a test case consisting of flow around a cylinder on a grid of 255x153x153 grid cells.
+
+
+## Known bugs:
+ - Automated docu generation fails due to inline function backtrack!(..)
+ - CI fails
