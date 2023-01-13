@@ -77,19 +77,19 @@ The tracer concentration, the streamwise, transversal and vertical velocity fiel
 
 The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at y = 0.5*ly are visualized in Figures 6 to 10.
 
-![Figure 6](docs/porous_convection3D_xy_C.gif)  
+![Figure 6](docs/porous_convection3D_xz_C.gif)  
 *Figure 6: Tracer transport with by flow around a cylinder.*
 
-![Figure 7](docs/porous_convection3D_xy_Vx.gif)  
+![Figure 7](docs/porous_convection3D_xz_Vx.gif)  
 *Figure 7: Velocity field $Vx$ of the flow around a cylinder.*
 
-![Figure 8](docs/porous_convection3D_xy_Vy.gif)  
+![Figure 8](docs/porous_convection3D_xz_Vy.gif)  
 *Figure 8: Velocity field $Vy$ of the flow around a cylinder.*
 
-![Figure 9](docs/porous_convection3D_xy_Vz.gif)  
+![Figure 9](docs/porous_convection3D_xz_Vz.gif)  
 *Figure 9: Velocity field $Vz$ of the flow around a cylinder.*
 
-![Figure 10](docs/porous_convection3D_xy_Pr.gif)  
+![Figure 10](docs/porous_convection3D_xz_Pr.gif)  
 *Figure 10: Velocity field $p$ of the flow around a cylinder.*
 
 ## Known bugs:
