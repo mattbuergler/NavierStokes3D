@@ -82,7 +82,7 @@ Calculate the pressure at the new time step (second step of Chorin's projection 
 end
 
 """
-    update_Pr!(Pr,dPrdτ,dτ)
+    compute_res!(Pr,dPrdτ,dτ)
 Calculate the residuals on the basis of the continuity constraint.
 """
 @parallel function compute_res!(Rp,Pr,∇V,ρ,dt,dx,dy,dz)
