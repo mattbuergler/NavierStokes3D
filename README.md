@@ -10,7 +10,7 @@
 4. [Known bugs](#known-bugs)
 
 ## Introduction
-NavierStokes3D is a solver for the incompressible 3D Navier Stokes equations. The code can be run both on multi-core CPUs or and GPUs enabled by making use of the [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) library, or even on multiple GPUs by making use of [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl). For time reasons und due encountered instabilities, the current version does not feature a turbulence model. An integration of a turbulence model to solve the Reynolds-Averaged Navier Stokes (RANS) equations, as well as a interface-tracking method such as Level-Set may be integrated at a later point. The development of this code was inspired by [NavierStokes.jl](https://github.com/utkinis/NavierStokes.jl) and therefore may exhibit similarities or common code parts. The main contribution of this repository is the extension to 3D and to a multi-GPU code.
+NavierStokes3D is a solver for the incompressible 3D Navier Stokes equations. The code can be run both on multi-core CPUs or and GPUs enabled by making use of the [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) library, or even on multiple GPUs by making use of [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl). The current version does not feature a turbulence model. An integration of a turbulence model to solve the Reynolds-Averaged Navier Stokes (RANS) equations, as well as a interface-tracking method such as Level-Set may be integrated at a later point. The development of this code was inspired by [NavierStokes.jl](https://github.com/utkinis/NavierStokes.jl) and therefore may exhibit similarities or common code parts. The main contribution of this repository is the extension to 3D and to a multi-GPU code.
 
 The code can be run with:
 
@@ -61,36 +61,36 @@ The solver was applied for solving a test case consisting of flow around a cylin
 The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at z = 0.5*lz are visualized in Figures 1 to 5.
 
 ![Figure 1](docs/porous_convection3D_xy_C.gif)  
-*Figure 1: Tracer transport with by flow around a cylinder.*
+**Figure 1:** Transport of a tracer with the flow around a cylinder.
 
 ![Figure 2](docs/porous_convection3D_xy_Vx.gif)  
-*Figure 2: Velocity field $Vx$ of the flow around a cylinder.*
+**Figure 2:** Velocity field $V_x$ of the flow around a cylinder.
 
 ![Figure 3](docs/porous_convection3D_xy_Vy.gif)  
-*Figure 3: Velocity field $Vy$ of the flow around a cylinder.*
+**Figure 3:** Velocity field $Vy$ of the flow around a cylinder.
 
 ![Figure 4](docs/porous_convection3D_xy_Vz.gif)  
-*Figure 4: Velocity field $Vz$ of the flow around a cylinder.*
+**Figure 4:** Velocity field $Vz$ of the flow around a cylinder.
 
 ![Figure 5](docs/porous_convection3D_xy_Pr.gif)  
-*Figure 5: Velocity field $p$ of the flow around a cylinder.*
+**Figure 5:** Scalar field $p$ of the flow around a cylinder.
 
 The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at y = 0.5*ly are visualized in Figures 6 to 10.
 
 ![Figure 6](docs/porous_convection3D_xz_C.gif)  
-*Figure 6: Tracer transport with by flow around a cylinder.*
+**Figure 6:** Tracer transport with by flow around a cylinder.
 
 ![Figure 7](docs/porous_convection3D_xz_Vx.gif)  
-*Figure 7: Velocity field $Vx$ of the flow around a cylinder.*
+**Figure 7:** Velocity field $Vx$ of the flow around a cylinder.
 
 ![Figure 8](docs/porous_convection3D_xz_Vy.gif)  
-*Figure 8: Velocity field $Vy$ of the flow around a cylinder.*
+**Figure 8:** Velocity field $Vy$ of the flow around a cylinder.
 
 ![Figure 9](docs/porous_convection3D_xz_Vz.gif)  
-*Figure 9: Velocity field $Vz$ of the flow around a cylinder.*
+**Figure 9:** Velocity field $Vz$ of the flow around a cylinder.
 
 ![Figure 10](docs/porous_convection3D_xz_Pr.gif)  
-*Figure 10: Velocity field $p$ of the flow around a cylinder.*
+**Figure 10:** Scalar field $p$ of the flow around a cylinder.
 
 ## Known bugs:
  - Outflow boundary condition becomes unstable at one point
