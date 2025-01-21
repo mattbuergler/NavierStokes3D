@@ -194,7 +194,6 @@ Backtrack the field A along the characteristic lines.
     iz1          = clamp(floor(Int,iz-δz),1,size(A,3))
     ix2,iy2,iz2  = clamp(ix1+1,1,size(A,1)),clamp(iy1+1,1,size(A,2)),clamp(iz1+1,1,size(A,3))
     δx = (δx>0) - (δx%1); δy = (δy>0) - (δy%1); δz = (δz>0) - (δz%1)
-    # trilinear interpolation
     fy1z1        = lerp(A_o[ix1,iy1,iz1],A_o[ix2,iy1,iz1],δx)
     fy1z2        = lerp(A_o[ix1,iy1,iz2],A_o[ix2,iy1,iz2],δx)
     fy2z1        = lerp(A_o[ix1,iy2,iz1],A_o[ix2,iy2,iz1],δx)
