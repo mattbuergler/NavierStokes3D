@@ -34,6 +34,6 @@ Pr = [1.533238393934448e-7 1.528864051208823e-7 1.5339073726141464e-7 1.53439844
         -0.0001605835017926249 -0.00015965105843374823 -0.0001535880012998529 -0.00015316531554535897]
 
 # run reference tests
-@testset "Test porous_convection_3D" begin
+@testset "Test 3D Navier Stokes Solver" begin
     @test all(T[inds_x,inds_y,inds_z] .≈ T_ref)
 end

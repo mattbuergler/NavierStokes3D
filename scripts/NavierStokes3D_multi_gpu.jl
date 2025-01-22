@@ -380,21 +380,21 @@ Run the incompressible 3D Navier Stokes equations.
     xci_g = LinRange(-lx/2+dx+dx/2, lx/2-dx-dx/2, nx_v)    # inner global coordinates
     yci_g = LinRange(-ly/2+dy+dy/2, ly/2-dy-dy/2, ny_v)    # inner global coordinates
     zci_g = LinRange(-lz/2+dz+dz/2, lz/2-dz-dz/2, nz_v)    # inner global coordinates
-    xvi_g = LinRange(-lx/2+dx     , lx/2-dx     , nx_v+2)  # inner global coordinates
-    yvi_g = LinRange(-ly/2+dy     , ly/2-dy     , ny_v+2)  # inner global coordinates
-    zvi_g = LinRange(-lz/2+dz     , lz/2-dz     , nz_v+2)  # inner global coordinates
+    xvi_g = LinRange(-lx/2+dx     , lx/2-dx     , nx_v+1)  # inner global coordinates
+    yvi_g = LinRange(-ly/2+dy     , ly/2-dy     , ny_v+1)  # inner global coordinates
+    zvi_g = LinRange(-lz/2+dz     , lz/2-dz     , nz_v+1)  # inner global coordinates
     C_v    = zeros(nx_v  , ny_v  , nz_v  )                 # global array for visu and return
     Pr_v   = zeros(nx_v  , ny_v  , nz_v  )                 # global array for visu and return
-    Vx_v   = zeros(nx_v+2, ny_v  , nz_v  )                 # global array for visu and return
-    Vy_v   = zeros(nx_v  , ny_v+2, nz_v  )                 # global array for visu and return
-    Vz_v   = zeros(nx_v  , ny_v  , nz_v+2)                 # global array for visu and return
+    Vx_v   = zeros(nx_v+1, ny_v  , nz_v  )                 # global array for visu and return
+    Vy_v   = zeros(nx_v  , ny_v+1, nz_v  )                 # global array for visu and return
+    Vz_v   = zeros(nx_v  , ny_v  , nz_v+1)                 # global array for visu and return
     C_inn  = zeros(nx-2, ny-2, nz-2)                       # no halo local array for visu
     Pr_inn = zeros(nx-2, ny-2, nz-2)                       # no halo local array for visu
     Vx_inn = zeros(nx-1, ny-2, nz-2)                       # no halo local array for visu
     Vy_inn = zeros(nx-2, ny-1, nz-2)                       # no halo local array for visu
     Vz_inn = zeros(nx-2, ny-2, nz-1)                       # no halo local array for visu
-    @show size(Vx_inn)
-    @show size(Vx_v)
+    # @show size(Vx_inn)
+    # @show size(Vx_v)
     # gathering global arrays
     C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
     Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)
@@ -430,16 +430,16 @@ Run the incompressible 3D Navier Stokes equations.
         p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
         p10 = heatmap(xci_g,zci_g,Array(Vy_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
         p11 = heatmap(xci_g,zvi_g,Array(Vz_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-        png(p2 ,@sprintf("viz3D_out/porous_convection3D_xy_Pr_%04d.png",iframe))
-        png(p3 ,@sprintf("viz3D_out/porous_convection3D_xy_C_%04d.png" ,iframe))
-        png(p4 ,@sprintf("viz3D_out/porous_convection3D_xy_Vx_%04d.png",iframe))
-        png(p5 ,@sprintf("viz3D_out/porous_convection3D_xy_Vy_%04d.png",iframe))
-        png(p6 ,@sprintf("viz3D_out/porous_convection3D_xy_Vz_%04d.png",iframe))
-        png(p7 ,@sprintf("viz3D_out/porous_convection3D_xz_Pr_%04d.png",iframe))
-        png(p8 ,@sprintf("viz3D_out/porous_convection3D_xz_C_%04d.png" ,iframe))
-        png(p9 ,@sprintf("viz3D_out/porous_convection3D_xz_Vx_%04d.png",iframe))
-        png(p10,@sprintf("viz3D_out/porous_convection3D_xz_Vy_%04d.png",iframe))
-        png(p11,@sprintf("viz3D_out/porous_convection3D_xz_Vz_%04d.png",iframe))
+        png(p2 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Pr_%04d.png",iframe))
+        png(p3 ,@sprintf("viz3D_out/3D_NavierStokes_xy_C_%04d.png" ,iframe))
+        png(p4 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Vx_%04d.png",iframe))
+        png(p5 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Vy_%04d.png",iframe))
+        png(p6 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Vz_%04d.png",iframe))
+        png(p7 ,@sprintf("viz3D_out/3D_NavierStokes_xz_Pr_%04d.png",iframe))
+        png(p8 ,@sprintf("viz3D_out/3D_NavierStokes_xz_C_%04d.png" ,iframe))
+        png(p9 ,@sprintf("viz3D_out/3D_NavierStokes_xz_Vx_%04d.png",iframe))
+        png(p10,@sprintf("viz3D_out/3D_NavierStokes_xz_Vy_%04d.png",iframe))
+        png(p11,@sprintf("viz3D_out/3D_NavierStokes_xz_Vz_%04d.png",iframe))
     end
     iframe+=1
     # action
@@ -498,17 +498,17 @@ Run the incompressible 3D Navier Stokes equations.
                     p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     p10 = heatmap(xci_g,zci_g,Array(Vy_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVy [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     p11 = heatmap(xci_g,zvi_g,Array(Vz_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.0,1.0),colorbar_title=" \nVz [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
-                    png(p1 ,@sprintf("viz3D_out/porous_convection3D_iter_%04d.png" ,iframe))
-                    png(p2 ,@sprintf("viz3D_out/porous_convection3D_xy_Pr_%04d.png",iframe))
-                    png(p3 ,@sprintf("viz3D_out/porous_convection3D_xy_C_%04d.png" ,iframe))
-                    png(p4 ,@sprintf("viz3D_out/porous_convection3D_xy_Vx_%04d.png",iframe))
-                    png(p5 ,@sprintf("viz3D_out/porous_convection3D_xy_Vy_%04d.png",iframe))
-                    png(p6 ,@sprintf("viz3D_out/porous_convection3D_xy_Vz_%04d.png",iframe))
-                    png(p7 ,@sprintf("viz3D_out/porous_convection3D_xz_Pr_%04d.png",iframe))
-                    png(p8 ,@sprintf("viz3D_out/porous_convection3D_xz_C_%04d.png" ,iframe))
-                    png(p9 ,@sprintf("viz3D_out/porous_convection3D_xz_Vx_%04d.png",iframe))
-                    png(p10,@sprintf("viz3D_out/porous_convection3D_xz_Vy_%04d.png",iframe))
-                    png(p11,@sprintf("viz3D_out/porous_convection3D_xz_Vz_%04d.png",iframe))
+                    png(p1 ,@sprintf("viz3D_out/3D_NavierStokes_iter_%04d.png" ,iframe))
+                    png(p2 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Pr_%04d.png",iframe))
+                    png(p3 ,@sprintf("viz3D_out/3D_NavierStokes_xy_C_%04d.png" ,iframe))
+                    png(p4 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Vx_%04d.png",iframe))
+                    png(p5 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Vy_%04d.png",iframe))
+                    png(p6 ,@sprintf("viz3D_out/3D_NavierStokes_xy_Vz_%04d.png",iframe))
+                    png(p7 ,@sprintf("viz3D_out/3D_NavierStokes_xz_Pr_%04d.png",iframe))
+                    png(p8 ,@sprintf("viz3D_out/3D_NavierStokes_xz_C_%04d.png" ,iframe))
+                    png(p9 ,@sprintf("viz3D_out/3D_NavierStokes_xz_Vx_%04d.png",iframe))
+                    png(p10,@sprintf("viz3D_out/3D_NavierStokes_xz_Vy_%04d.png",iframe))
+                    png(p11,@sprintf("viz3D_out/3D_NavierStokes_xz_Vz_%04d.png",iframe))
                 end
             end
             # saving results
