@@ -1,5 +1,5 @@
 using Test
-include("../scripts/NavierStokes3D.jl")
+include("../scripts/NavierStokes3D_multi_gpu.jl")
 
 # Unit tests for averaging functions
 @testset "Test average functions" begin
