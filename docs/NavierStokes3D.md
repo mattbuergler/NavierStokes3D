@@ -1,8 +1,4 @@
-```@meta
-EditURL = "../scripts/NavierStokes3D.jl"
-```
-
-````@example NavierStokes3D
+````julia
 const USE_GPU = false
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
@@ -294,7 +290,7 @@ Run the incompressible 3D Navier Stokes equations.
 
 physics
 
-````@example NavierStokes3D
+````julia
     # dimensionally independent
     lx        = 1.0         # streamwise dimension [m]
     ρ         = 1000.0      # density [kg/m^3]
@@ -330,7 +326,7 @@ physics
 
 numerics
 
-````@example NavierStokes3D
+````julia
     nx                                        # number of cells in streamwise direction
     ny        = ceil(Int,nx*ly_lx)            # number of cells in transversal direction
     nz        = ceil(Int,nx*lz_lx)            # number of cells in vertical direction
@@ -349,7 +345,7 @@ numerics
 
 preprocessing
 
-````@example NavierStokes3D
+````julia
     dx,dy,dz    = lx/nx_g(),ly/ny_g(),lz/nz_g()                               # grid size
     dt        = min(CFL_visc*max(dx,dy,dz)^2*ρ/μ,CFL_adv*max(dx,dy,dz)/vin)   # time step
     damp      = 2/nx                                                          # camping coefficient
@@ -358,7 +354,7 @@ preprocessing
 
 allocation
 
-````@example NavierStokes3D
+````julia
     Pr        = @zeros(nx  ,ny  ,nz  )  # Pressure
     dPrdτ     = @zeros(nx-2,ny-2,nz-2)  # time derivative of pressure
     C         = @zeros(nx  ,ny  ,nz  )  # Scalar field concentration
@@ -382,7 +378,7 @@ allocation
 
 define global coordinates for intial and boundary conditions
 
-````@example NavierStokes3D
+````julia
     xco_g     = x_g(1   ,dx,C ) - (lx-dx)/2
     yco_g     = y_g(1   ,dy,C ) - (ly-dy)/2
     zco_g     = z_g(1   ,dz,C ) - (lz-dz)/2
@@ -392,7 +388,7 @@ define global coordinates for intial and boundary conditions
 
 initialization
 
-````@example NavierStokes3D
+````julia
     Vy[1,:,:] .= vin  # set constant velocity at inflow boundary
     Pr         = Data.Array([-(z_g(iz,dz,C )-dz/2)*ρ*g + 0*yc[iy] + 0*zc[iz] for ix=1:size(C ,1),iy=1:size(C ,2),iz=1:size(C ,3)]) # set hydrostatic pressure
     update_halo!(Pr)
@@ -402,7 +398,7 @@ initialization
 
 Initialization for saving results, visualization and return
 
-````@example NavierStokes3D
+````julia
     #init stuff
     iframe = 0; it = 0
     nx_v,ny_v,nz_v = (nx-2)*dims[1],(ny-2)*dims[2],(nz-2)*dims[3]
@@ -410,7 +406,7 @@ Initialization for saving results, visualization and return
 
 inner points only
 
-````@example NavierStokes3D
+````julia
     xci_g = LinRange(-lx/2+dx+dx/2, lx/2-dx-dx/2, nx_v)    # inner global coordinates
     yci_g = LinRange(-ly/2+dy+dy/2, ly/2-dy-dy/2, ny_v)    # inner global coordinates
     zci_g = LinRange(-lz/2+dz+dz/2, lz/2-dz-dz/2, nz_v)    # inner global coordinates
@@ -433,7 +429,7 @@ inner points only
 
 gathering global arrays
 
-````@example NavierStokes3D
+````julia
     C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
     Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)
     Vx_inn .= Array(Vx)[2:end-1,2:end-1,2:end-1]; gather!(Vx_inn, Vx_v)
@@ -442,12 +438,11 @@ gathering global arrays
     if do_save
         if me==0
             !ispath("./out_save") && mkdir("./out_save");
-nothing #hide
 ````
 
 save initial conditions
 
-````@example NavierStokes3D
+````julia
             save_array(@sprintf("out_save/out_C_v_%04d" ,iframe),convert.(Float32,C_v ))
             save_array(@sprintf("out_save/out_Pr_v_%04d",iframe),convert.(Float32,Pr_v))
             save_array(@sprintf("out_save/out_Vx_v_%04d",iframe),convert.(Float32,Vx_v))
@@ -459,7 +454,7 @@ save initial conditions
 
 visualization
 
-````@example NavierStokes3D
+````julia
     if do_vis
         ENV["GKSwstype"]="nul"
         if (me==0) if isdir("viz3D_out")==false mkdir("viz3D_out") end; loadpath = "viz3D_out/"; anim = Animation(loadpath,String[])
@@ -469,7 +464,7 @@ visualization
 visualize initial conditions
 horizontal planes (x-y) at z = 0
 
-````@example NavierStokes3D
+````julia
         p2  = heatmap(xci_g,yci_g,Array(Pr_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
         p3  = heatmap(xci_g,yci_g,Array(C_v )[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
         p4  = heatmap(xvi_g,yci_g,Array(Vx_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
@@ -479,7 +474,7 @@ horizontal planes (x-y) at z = 0
 
 vertical planes (x-z) at y = 0
 
-````@example NavierStokes3D
+````julia
         p7  = heatmap(xci_g,zci_g,Array(Pr_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
         p8  = heatmap(xci_g,zci_g,Array(C_v )[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
         p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
@@ -501,14 +496,14 @@ vertical planes (x-z) at y = 0
 
 action
 
-````@example NavierStokes3D
+````julia
     for it = 1:nt
         err_evo = Float64[]; iter_evo = Float64[]
 ````
 
 1. Step of Chorin's projection method: predict intermediate velocity
 
-````@example NavierStokes3D
+````julia
         @parallel update_τ!(τxx,τyy,τzz,τxy,τxz,τyz,Vx,Vy,Vz,μ,dx,dy,dz)            # update viscous stress tensor
         update_halo!(τxx,τyy,τzz)
         @parallel predict_V!(Vx,Vy,Vz,τxx,τyy,τzz,τxy,τxz,τyz,ρ,g,dt,dx,dy,dz)      # predict intermediate velocity (only diffusion)
@@ -521,7 +516,7 @@ action
 
 pseudo-transient solver for the Poisson equation of Pr(n+1)
 
-````@example NavierStokes3D
+````julia
         for iter = 1:niter
             @parallel update_dPrdτ!(Pr,dPrdτ,∇V,ρ,dt,dτ,damp,dx,dy,dz)              # update time derivative of Pr
             update_halo!(∇V)
@@ -546,13 +541,13 @@ pseudo-transient solver for the Poisson equation of Pr(n+1)
 
 Visualization
 
-````@example NavierStokes3D
+````julia
         if (do_vis && it % nvis == 0) || (do_save && it % nsave == 0)
 ````
 
 gather local arrays without halo
 
-````@example NavierStokes3D
+````julia
             C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
             Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)
             Vx_inn .= Array(Vx)[2:end-1,2:end-1,2:end-1]; gather!(Vx_inn, Vx_v)
@@ -565,7 +560,7 @@ gather local arrays without halo
 
 horizontal planes (x-y) at z = 0
 
-````@example NavierStokes3D
+````julia
                     p2  = heatmap(xci_g,yci_g,Array(Pr_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     p3  = heatmap(xci_g,yci_g,Array(C_v )[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     p4  = heatmap(xvi_g,yci_g,Array(Vx_v)[:,:,ceil(Int,nz_g()/2)]';aspect_ratio=1,xlabel="x [m]",ylabel="y [m]",xlims=(-lx/2,lx/2),ylims=(-ly/2,ly/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
@@ -575,7 +570,7 @@ horizontal planes (x-y) at z = 0
 
 vertical planes (x-z) at y = 0
 
-````@example NavierStokes3D
+````julia
                     p7  = heatmap(xci_g,zci_g,Array(Pr_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-1.5,1.5),colorbar_title=" \nPr [Pa]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     p8  = heatmap(xci_g,zci_g,Array(C_v )[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(0.0,1.0),colorbar_title=" \nC [-]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
                     p9  = heatmap(xvi_g,zci_g,Array(Vx_v)[:,ceil(Int,ny_g()/2),:]';aspect_ratio=1,xlabel="x [m]",ylabel="z [m]",xlims=(-lx/2,lx/2),ylims=(-lz/2,lz/2),clims=(-0.25,1.5),colorbar_title=" \nVx [m/s]",right_margin = 5Plots.mm,title="t = $(@sprintf("%.3f",it*dt)) s")
@@ -598,7 +593,7 @@ vertical planes (x-z) at y = 0
 
 saving results
 
-````@example NavierStokes3D
+````julia
             if do_save && it % nsave == 0
                 if me==0
                     save_array(@sprintf("out_save/out_C_v_%04d" ,iframe),convert.(Float32,C_v ))
@@ -615,7 +610,7 @@ saving results
 
 gather local arrays without halo for return call
 
-````@example NavierStokes3D
+````julia
     C_inn  .= Array(C )[2:end-1,2:end-1,2:end-1]; gather!(C_inn , C_v )
     Pr_inn .= Array(Pr)[2:end-1,2:end-1,2:end-1]; gather!(Pr_inn, Pr_v)
     Vx_inn .= Array(Vx)[2:end-1,2:end-1,2:end-1]; gather!(Vx_inn, Vx_v)
