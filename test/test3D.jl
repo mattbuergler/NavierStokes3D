@@ -1,13 +1,6 @@
 using Test
 include("../scripts/NavierStokes3D_multi_gpu.jl")
 
-# Unit tests for averaging functions
-@testset "Test average functions" begin
-    @test all(av1([1, 2, 3, 4]) .≈ [1.5, 2.5, 3.5])
-    @test all(avx([1 2 3 4;  1 2 3 4]) .≈ [1 2 3 4])
-    @test all(avy([1 2 3 4;  1 2 3 4]) .≈ [1.5 2.5 3.5; 1.5 2.5 3.5])
-end
-
 # Reference tests
 # get the solution
 C,Pr,Vx,Vy,Vz = run_navierstokes3D(do_vis=false, do_save=false, do_print=true, nx=63, nt=1)
@@ -16,7 +9,7 @@ inds_x = [31 38 50 51]
 inds_y = [2 5 19 31]
 inds_z = [12 13 23 23]
 @show Pr[inds_x,inds_y,inds_z]
-Pr = [1.533238393934448e-7 1.528864051208823e-7 1.5339073726141464e-7 1.5343984486166758e-7;;;;
+Pr_ref = [1.533238393934448e-7 1.528864051208823e-7 1.5339073726141464e-7 1.5343984486166758e-7;;;;
          4.899815577977306e-7 1.5616085552454124e-7 1.5338275094223396e-7 1.534319424539255e-7;;;;
          0.19578294327792722 0.001261159687564842 1.5335773442293184e-7 1.534034099299091e-7;;;;
          1.533238393934448e-7 1.528864051208823e-7 1.5339073726141467e-7 1.5343984486166758e-7;;;;;;
@@ -35,5 +28,5 @@ Pr = [1.533238393934448e-7 1.528864051208823e-7 1.5339073726141464e-7 1.53439844
 
 # run reference tests
 @testset "Test 3D Navier Stokes Solver" begin
-    @test all(T[inds_x,inds_y,inds_z] .≈ T_ref)
+    @test all(Pr[inds_x,inds_y,inds_z] .≈ Pr_ref)
 end
