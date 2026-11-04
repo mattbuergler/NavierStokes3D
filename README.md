@@ -1,98 +1,120 @@
-![CI](https://github.com/mattbuergler/NavierStokes3D/actions/workflows/CI.yml/badge.svg)
-![Run Literate](https://github.com/mattbuergler/NavierStokes3D/actions/workflows/Literate.yml/badge.svg)
-
 # NavierStokes3D
 
-1. [Introduction](#introduction)
-2. [Mathematical model](#mathematical-model)
-3. [Numerical model](#numerical-model)
+[![CI](https://github.com/mattbuergler/NavierStokes3D/actions/workflows/CI.yml/badge.svg)](https://github.com/mattbuergler/NavierStokes3D/actions/workflows/CI.yml)
+
+A parallel solver for the incompressible 3D Navier–Stokes equations, written in Julia. The same code runs on multi-core CPUs, on a single GPU, and on many GPUs through MPI:
+
+- [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) provides architecture-agnostic stencil kernels (threads or CUDA).
+- [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) handles the domain decomposition and halo exchange.
+
+It started as a project for a course on solving PDEs in parallel on GPUs, and was inspired by [NavierStokes.jl](https://github.com/utkinis/NavierStokes.jl). The main contribution is the extension to 3D and to multiple GPUs.
+
+![Flow around a cylinder](docs/flow.gif)
+
+*Flow around a cylinder at Re = 1000 on a 127 × 77 × 77 grid (horizontal mid-plane). Tracer, speed, vorticity and pressure.*
+
+## Contents
+
+1. [Mathematical model](#mathematical-model)
+2. [Numerical method](#numerical-method)
+3. [Usage](#usage)
 4. [Test case](#test-case)
-4. [Known bugs](#known-bugs)
-
-## Introduction
-NavierStokes3D is a solver for the incompressible 3D Navier Stokes equations. The code can be run both on multi-core CPUs or and GPUs enabled by making use of the [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) library, or even on multiple GPUs by making use of [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl). The current version does not feature a turbulence model. An integration of a turbulence model to solve the Reynolds-Averaged Navier Stokes (RANS) equations, as well as a interface-tracking method such as Level-Set may be integrated at a later point. The development of this code was inspired by [NavierStokes.jl](https://github.com/utkinis/NavierStokes.jl) and therefore may exhibit similarities or common code parts. The main contribution of this repository is the extension to 3D and to a multi-GPU code.
-
-The code can be run with:
-
-```bash
-julia -O3 --check-bounds=no scripts/NavierStokes3D.jl
-```
+5. [Tests](#tests)
+6. [Limitations](#limitations)
 
 ## Mathematical model
-The incompressible 3D Navier Stokes equations are defined as
 
-$$\frac{\partial \boldsymbol{u}}{\partial t} + \left(\boldsymbol{u} \cdot \nabla \right)\boldsymbol{u} = -\frac{1}{\rho}\nabla p + \nu \nabla^2 \boldsymbol{u} + \boldsymbol{f} $$
+The incompressible Navier–Stokes equations are
 
-where $\boldsymbol{u}$ is the velocity vector field, $p$ the pressure field, $\boldsymbol{f}$ are body forces, $\rho$ the density and $\nu$ the dynamic viscosity.
+$$\frac{\partial \boldsymbol{u}}{\partial t} + (\boldsymbol{u}\cdot\nabla)\boldsymbol{u} = -\frac{1}{\rho}\nabla p + \frac{1}{\rho}\nabla\cdot\boldsymbol{\tau} + \boldsymbol{g}, \qquad \nabla\cdot\boldsymbol{u} = 0,$$
 
-Further, the continuity equation for incompressible flow can be written as:
+with velocity $\boldsymbol{u}$, pressure $p$, density $\rho$, viscous stress $\boldsymbol{\tau}$ (dynamic viscosity $\mu$) and gravity $\boldsymbol{g}$. A passive tracer $C$ is advected with the flow.
 
-$$\nabla \cdot \boldsymbol{u} = 0$$
+## Numerical method
 
-## Numerical model
-One of the difficulties when solving the Navier Stokes equations with a first order finite difference and explicit Euler scheme for time, is the dependency on the pressure gradient at the new time step $\boldsymbol{u}^{n+1}$ on $\nabla p^{n+1}$ and also fullfilling the continuity contraint $\nabla\cdot\boldsymbol{u}^{n+1}=0$.
+All fields live on a staggered (MAC) grid: pressure, tracer and normal stresses at cell centres, velocity components at cell faces. Each time step is a fractional step in the spirit of Chorin's projection method:
 
-$$\frac{\boldsymbol{u}^{n+1} - \boldsymbol{u}^{n}}{\Delta t} + \left(\boldsymbol{u}^{n} \cdot \nabla \right)\boldsymbol{u}^{n} = -\frac{1}{\rho}\nabla p^{n+1} + \nu \nabla^2 \boldsymbol{u}^{n} + \boldsymbol{f}^{n}$$
+1. **Prediction.** An intermediate velocity $\boldsymbol{u}^*$ accounts for viscous stresses and gravity:
+   $\boldsymbol{u}^{*} = \boldsymbol{u}^{n} + \frac{\Delta t}{\rho}\nabla\cdot\boldsymbol{\tau}^n + \Delta t\,\boldsymbol{g}$.
+2. **Pressure.** Requiring $\nabla\cdot\boldsymbol{u}^{n+1}=0$ gives a Poisson equation,
+   $\nabla^2 p^{n+1} = \frac{\rho}{\Delta t}\nabla\cdot\boldsymbol{u}^{*}$,
+   which is solved with an accelerated *pseudo-transient* method: a damped wave equation in pseudo-time is iterated until the scaled residual falls below a tolerance. Only local stencils are needed, so the solver scales well on GPUs.
+3. **Projection.** $\boldsymbol{u}^{**} = \boldsymbol{u}^{*} - \frac{\Delta t}{\rho}\nabla p^{n+1}$.
+4. **Advection.** Velocity and tracer are advected with the semi-Lagrangian method of characteristics and tri-linear interpolation.
 
-To overcome this difficulty, the splitting scheme of Chorin, also called Chorin's method, was applied. Therefore, an intermediate velocity $\boldsymbol{u}^{*}$ is computed in a first step by only considering the diffusive term and the body force $\boldsymbol{g}$:
+The cylinder is an immersed no-slip obstacle (velocity set to zero inside). Boundaries: fixed velocity at the inlet, fixed pressure at the outlet, zero gradient elsewhere.
 
-$$\boldsymbol{u}^{*} = \boldsymbol{u}^{n} +  \Delta t(\nu \nabla^2 \boldsymbol{u}^{n} + \boldsymbol{g}^{n})$$
+Because the pseudo-transient iterations and the advection both use only neighbouring cells, the multi-rank result is identical to the single-rank result up to round-off. This is checked by the test suite. For this to hold, a departure point may not move farther than the one-cell halo, which limits the advective CFL number (see `CFL_adv`).
 
-In a second step, the velocity a second intermediate time step $\boldsymbol{u}^{**}$ can be defined as by only considering the pressure term as:
+## Usage
 
-$$\frac{\boldsymbol{u}^{**} - \boldsymbol{u}^{n}}{\Delta t} = -\frac{1}{\rho}\nabla p^{n+1}$$
+### Installation
 
-By taking the divergence  $\nabla\cdot$ of the above equation and requiring that $\nabla\cdot\boldsymbol{u}^{**}=0$, one obtains the Poisson equation:
+```bash
+git clone https://github.com/mattbuergler/NavierStokes3D.git
+cd NavierStokes3D
+julia --project -e 'using Pkg; Pkg.instantiate()'
+```
 
-$$\nabla^2p^{n+1} = \frac{\rho}{\Delta t} \nabla \cdot\boldsymbol{u}^{*}$$
+### Running
 
-The Poisson equation is solved by applying a pseudo-transient method. The pseudo-transient equation is solved iteratively.
+```bash
+# multi-threaded CPU (nx = cells per rank, nt = time steps, output directory, output every nout steps)
+julia --project -t auto -O3 --check-bounds=no scripts/run.jl 127 500 out 10
 
-$$\frac{\partial p}{\partial \tau} + \Delta^2p^n = \frac{\rho}{\Delta t} \nabla \cdot\boldsymbol{u}^{*}$$
+# single GPU
+NS3D_USE_GPU=true julia --project -O3 --check-bounds=no scripts/run.jl 255 1000 out 10
 
-In a final step, the velocity at the new time step is obtained with an advection step solved with the method of characteristics:
+# several GPUs / ranks (one rank per GPU; use a CUDA-aware MPI where available)
+mpiexec -n 4 julia --project -O3 --check-bounds=no scripts/run.jl 255 1000 out 10
+```
 
-$$\frac{\boldsymbol{u}^{n+1} - \boldsymbol{u}^{**} }{\Delta t} = - \left(\boldsymbol{u}^{**} \cdot \nabla \right)\boldsymbol{u}^{**}$$
+`scripts/run_slurm.sh` is an example job script for a GPU cluster. From Julia:
 
+```julia
+using NavierStokes3D
+res = run_navierstokes3D(nx=63, nt=100, Re=1000.0, do_save=true, outdir="out")
+res.fields.Vx          # gathered cell-centred field on rank 0
+```
+
+The backend (`NS3D_USE_GPU`) is selected when the package is loaded. `nx` is the local size per rank including the two halo cells; the global size follows from the number of ranks.
+
+### Visualisation
+
+The solver writes raw `Float32` fields plus a `meta.toml` to the output directory. Plotting is a separate step with its own environment, so that it can run on a different machine than the solver:
+
+```bash
+julia --project=scripts -e 'using Pkg; Pkg.instantiate()'
+julia --project=scripts scripts/visualize.jl out docs
+```
+
+This creates `docs/snapshot.png` and `docs/flow.gif`: tracer, speed, vorticity and pressure in a horizontal and a vertical slice, with a fixed colour scale and the cylinder masked.
 
 ## Test case
-The solver was applied for solving a test case consisting of flow around a cylinder on a grid of 255x153x153 grid cells.
 
-The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at z = 0.5*lz are visualized in Figures 1 to 5.
+Flow past a cylinder (diameter $D = 0.1$ m, axis along $z$) in a $1 \times 0.6 \times 0.6$ m channel: inflow velocity $V_\infty = 1$ m/s, $\rho = 1000$ kg/m³, outlet at fixed pressure. The Reynolds number $Re = \rho V_\infty D/\mu$ is a parameter (default 1000). The images show a run with $127 \times 77 \times 77$ cells and 700 time steps ($t V_\infty/D \approx 28$) on one RTX 3080 (about 6 minutes including compilation).
 
-![Figure 1](docs/porous_convection3D_xy_C.gif)  
-**Figure 1:** Transport of a tracer with the flow around a cylinder.
+![Snapshot](docs/snapshot.png)
 
-![Figure 2](docs/porous_convection3D_xy_Vx.gif)  
-**Figure 2:** Velocity field $V_x$ of the flow around a cylinder.
+Things to know when reading these results:
 
-![Figure 3](docs/porous_convection3D_xy_Vy.gif)  
-**Figure 3:** Velocity field $Vy$ of the flow around a cylinder.
+- **This is not yet a validated benchmark.** The solver has been checked for self-consistency (see [Tests](#tests)), but not compared against reference data such as drag coefficient or Strouhal number.
+- **The wake is symmetric and steady.** No vortex shedding is observed, although it would be expected at $Re = 1000$. The flow is perfectly symmetric (no perturbation), the cylinder is resolved by only about 12 cells, and the scheme is first order and diffusive; which of these matters most has not been investigated.
+- The flow is uniform along $z$ (the cylinder spans the domain and nothing breaks this symmetry), so the horizontal mid-plane shows all of the structure.
+- At $255 \times 153 \times 153$ cells one time step takes about 7 s on the same GPU, since the pressure solver needs about 2400 pseudo-transient iterations per step.
 
-![Figure 4](docs/porous_convection3D_xy_Vz.gif)  
-**Figure 4:** Velocity field $Vz$ of the flow around a cylinder.
+## Tests
 
-![Figure 5](docs/porous_convection3D_xy_Pr.gif)  
-**Figure 5:** Scalar field $p$ of the flow around a cylinder.
+```bash
+julia --project -e 'using Pkg; Pkg.test()'
+```
 
-The tracer concentration, the streamwise, transversal and vertical velocity fields as well as the pressure field in the x-y-plane at y = 0.5*ly are visualized in Figures 6 to 10.
+The suite covers the interpolation kernel (exact for linear fields), a short end-to-end run (finite, bounded, converged pressure solver, output files) and the consistency of the results between 1 and 2 MPI ranks. It runs on the CPU in continuous integration.
 
-![Figure 6](docs/porous_convection3D_xz_C.gif)  
-**Figure 6:** Tracer transport with by flow around a cylinder.
+## Limitations
 
-![Figure 7](docs/porous_convection3D_xz_Vx.gif)  
-**Figure 7:** Velocity field $Vx$ of the flow around a cylinder.
-
-![Figure 8](docs/porous_convection3D_xz_Vy.gif)  
-**Figure 8:** Velocity field $Vy$ of the flow around a cylinder.
-
-![Figure 9](docs/porous_convection3D_xz_Vz.gif)  
-**Figure 9:** Velocity field $Vz$ of the flow around a cylinder.
-
-![Figure 10](docs/porous_convection3D_xz_Pr.gif)  
-**Figure 10:** Scalar field $p$ of the flow around a cylinder.
-
-## Known bugs:
- - Outflow boundary condition becomes unstable at one point
- - Automated docu generation fails due to inline function backtrack!(..)
- - CI fails
+- Low-order scheme: first-order explicit Euler in time, semi-Lagrangian advection with linear interpolation. This is numerically diffusive; there is no turbulence model.
+- The explicit time step is limited by advection (`CFL_adv = 0.5`) and diffusion.
+- The cylinder is a staircase (voxelised) immersed boundary, not boundary-fitted.
+- Output is gathered on rank 0, which limits the largest case that can be written.
+- The pressure solver dominates the run time; a multigrid or FFT-based solver would be faster at high resolution.

@@ -27,3 +27,8 @@ Manifest.toml
 .vscode
 */.vscode
 */*/.vscode
+# simulation output
+/out/
+out_save/
+viz3D_out/
+*.bin
