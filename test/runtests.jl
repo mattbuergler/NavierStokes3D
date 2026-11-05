@@ -46,6 +46,13 @@ const NS = NavierStokes3D
         @test isfile(joinpath(outdir, "meta.toml"))
         @test isfile(joinpath(outdir, "Pr_0000.bin")) && isfile(joinpath(outdir, "Pr_0002.bin"))
         @test filesize(joinpath(outdir, "C_0000.bin")) == 4*length(C)
+        # force on the cylinder: one entry per step, finite, drag points downstream, no lift by symmetry
+        f = res.stats.force
+        @test length(f.t) == 4 && length(f.Cd) == 4 && length(f.Cl) == 4
+        @test all(isfinite, f.Cd) && all(>(0), f.Cd)
+        @test maximum(abs, f.Cl) < 1e-8
+        rows = readlines(joinpath(outdir, "forces.csv"))
+        @test rows[1] == "t,Fx,Fy,Cd,Cl" && length(rows) == 5
     end
 
     @testset "results are independent of the number of MPI ranks" begin
