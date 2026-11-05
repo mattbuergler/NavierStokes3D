@@ -1,6 +1,6 @@
 # Post-processing of the results written by `scripts/run.jl`.
 #
-#   julia --project=scripts scripts/visualize.jl [datadir] [outdir] [stride]
+#   julia --project=scripts scripts/visualize.jl [datadir] [outdir] [stride] [framerate] [t_start]
 #
 # Produces `snapshot.png` (last frame) and `flow.gif` (every `stride`-th frame) showing tracer,
 # speed, vorticity and pressure in the horizontal mid-plane (x-y, z = lz/2). The flow is
@@ -11,7 +11,9 @@ import TOML
 
 datadir = length(ARGS) ≥ 1 ? ARGS[1] : "out"
 outdir  = length(ARGS) ≥ 2 ? ARGS[2] : "docs"
-stride  = length(ARGS) ≥ 3 ? parse(Int, ARGS[3]) : 2
+stride  = length(ARGS) ≥ 3 ? parse(Int, ARGS[3]) : 1
+fps     = length(ARGS) ≥ 4 ? parse(Int, ARGS[4]) : 8
+tstart  = length(ARGS) ≥ 5 ? parse(Float64, ARGS[5]) : 0.0   # first time of the gif in D/V∞
 mkpath(outdir)
 
 meta   = TOML.parsefile(joinpath(datadir, "meta.toml"))
@@ -110,7 +112,8 @@ update!(last(frames))
 save(joinpath(outdir, "snapshot.png"), fig; px_per_unit=2)
 println("wrote ", joinpath(outdir, "snapshot.png"))
 
-record(fig, joinpath(outdir, "flow.gif"), frames[1:stride:end]; framerate=12) do frame
+gif_frames = filter(f -> times[f+1]*V∞/D ≥ tstart, frames)
+record(fig, joinpath(outdir, "flow.gif"), gif_frames[1:stride:end]; framerate=fps) do frame
     update!(frame)
 end
 println("wrote ", joinpath(outdir, "flow.gif"))
