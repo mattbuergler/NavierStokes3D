@@ -19,7 +19,7 @@ It started as a project for a course on solving PDEs in parallel on GPUs, and wa
 2. [Numerical method](#numerical-method)
 3. [Usage](#usage)
 4. [Test case](#test-case)
-5. [Validation against the literature](#validation-against-the-literature)
+5. [Validation](#validation)
 6. [Tests](#tests)
 7. [Limitations](#limitations)
 
@@ -104,62 +104,47 @@ This creates `docs/snapshot.png` (last frame) and `docs/flow.gif` (every `stride
 julia --project=scripts scripts/strouhal.jl out [x_D] [y_D] [t_start]
 ```
 
-samples the transverse velocity $V_y$ at a probe in the wake ($x_D$ diameters behind the cylinder axis, $y_D$ diameters off the axis; defaults 5 and 0.5), removes the mean, applies a Hann window and takes the frequency $f$ of the largest peak of the Fourier transform of the time series after `t_start` (in units of $D/V_\infty$, default 40). The Strouhal number is $St = fD/V_\infty$. The frame spacing sets the sampling, so choose `nout` such that a shedding period contains at least about five frames.
+Takes the dominant frequency $f$ of $V_y$ at a probe in the wake ($x_D$ diameters behind the cylinder, $y_D$ off the axis; defaults 5 and 0.5) after `t_start` (in $D/V_\infty$, default 40); $St = fD/V_\infty$. Choose `nout` so that a shedding period has at least about five frames.
 
 ## Test case
 
-Flow past a cylinder (diameter $D = 0.1$ m, axis along $z$) in a channel of $2 \times 1 \times 0.4$ m ($20D \times 10D \times 4D$): inflow velocity $V_\infty = 1$ m/s, $\rho = 1000$ kg/m³, outlet at fixed pressure. The cylinder axis is $6D$ behind the inlet and $14D$ in front of the outlet. The Reynolds number $Re = \rho V_\infty D/\mu$ is a parameter; the images show $Re = 10\,000$. The grid has $254 \times 127 \times 51$ cells (the cylinder is about 12.7 cells across), the run covers 3800 time steps ($t V_\infty/D \approx 150$), and a small disturbance ($5\,\%$ of $V_\infty$, `perturb=0.05`) is added to $V_y$ in the wake at $t = 0$ to break the symmetry. It took about 1 h 20 min on one Tesla P100 (about 1.3 s per time step, once compiled).
+Flow past a cylinder ($D = 0.1$ m, axis along $z$) in a $2 \times 1 \times 0.4$ m channel ($20D \times 10D \times 4D$), $V_\infty = 1$ m/s, $\rho = 1000$ kg/m³, $Re = 10\,000$. The axis is $6D$ behind the inlet. Grid $254 \times 127 \times 51$ ($D \approx 12.7$ cells), 3800 time steps ($t V_\infty/D \approx 150$), a small initial disturbance in the wake (`perturb=0.05`). About 1 h 20 min on one Tesla P100.
 
 ![Snapshot](docs/snapshot.png)
 
-Results and things to know when reading them:
+A von Kármán vortex street forms and leaves through the outlet, with $St \approx 0.17$ (from `scripts/strouhal.jl`, probes $3D$ to $7D$ behind the cylinder, resolution about $0.01$). Not tested: shedding without the disturbance, and the drag of this case. Blockage is $10\,\%$. Earlier runs with the cylinder $1D$ behind the inlet and $t V_\infty/D \approx 28$ showed a steady wake; they were too short and too confined to be conclusive.
 
-- **The wake sheds vortices.** A von Kármán vortex street forms behind the cylinder and leaves through the outlet. The pattern is very regular, as expected for a diffusive first-order scheme.
-- **Strouhal number $St \approx 0.17$.** It is measured with `scripts/strouhal.jl` from $V_y$ at probes $3$ to $7$ diameters behind the cylinder, using frames at $t V_\infty/D \ge 40$ (frame spacing about $1 D/V_\infty$, frequency resolution about $0.01$). This is somewhat below the value of about 0.2 usually quoted for this Reynolds number range. No systematic comparison has been made, so treat $St$ as a rough number.
-- **This is not a validated benchmark.** The solver has been checked for self-consistency (see [Tests](#tests)) and compared with published cylinder data at Re = 40 and 100 (see [Validation](#validation-against-the-literature)), where the agreement is partial: the shedding was too slow and too weak at $16$ cells per diameter. No such comparison exists for this Re = $10^4$ case, and its drag was not evaluated. Blockage ($10\,\%$), the staircase cylinder and the low-order scheme all affect the result.
-- **The role of the perturbation is not known.** The run used `perturb=0.05`. Whether shedding also appears without it, and how sensitive $St$ is to it, has not been tested. An earlier run in a much smaller setup (the cylinder $1D$ behind the inlet, a $6D$-wide channel, $127 \times 77 \times 77$ cells, $Re = 1000$ and $Re = 10^5$, no perturbation, $t V_\infty/D \approx 28$) showed a steady, symmetric wake; that was too short and too confined to say anything about the physics.
-- The flow is uniform along $z$ except for what the numerics introduce (the cylinder spans the domain and the disturbance does not depend on $z$), so the horizontal mid-plane shows the structure. The $4D$ span therefore does not capture three-dimensional wake instabilities.
-- At $255 \times 153 \times 153$ cells one time step takes about 7 s on an RTX 3080, since the pressure solver needs about 2400 pseudo-transient iterations per step.
+## Validation
 
-## Validation against the literature
-
-Flow past a circular cylinder in a nearly unbounded domain (`scripts/benchmark.jl`: $30D \times 16D$, blockage $6\,\%$, cylinder $8D$ behind the inlet, uniform inflow, $16$ cells per $D$, two-dimensional flow with a 6-cell span), compared with the values collected in Table 1 of [arXiv:1803.09380](https://arxiv.org/abs/1803.09380) (results of four published studies, run there with $40$ cells per $D$ in a $40D \times 20D$ domain). Both cases were run on a Tesla P100.
+Flow past a cylinder in a nearly unbounded domain (`scripts/benchmark.jl`: $30D \times 16D$, $6\,\%$ blockage, $16$ cells per $D$, 2D), compared with the published values collected in Table 1 of [arXiv:1803.09380](https://arxiv.org/abs/1803.09380) ($40$ cells per $D$).
 
 | | this solver | literature |
 |---|---|---|
-| **Re = 40** (steady) | | |
-| $C_d$, control volume (`force_cv.jl`) | 1.73 – 1.76 | 1.54 – 1.66 |
-| $C_d$, surface integral (`force_surface.jl`) | 1.38 – 1.62 | |
+| **Re = 40**: $C_d$, control volume | 1.73 – 1.76 | 1.54 – 1.66 |
+| $C_d$, surface integral | 1.38 – 1.62 | |
 | $C_d$, solver momentum exchange | 1.22 | |
 | recirculation length $L_w/D$ | 2.17 | 2.21 – 2.55 |
-| **Re = 100** (periodic) | | |
-| Strouhal number $St$ | 0.142 | 0.166 – 0.172 |
-| $C_d$ (mean), control volume | 1.54 | 1.38 – 1.43 |
-| $C_d$ (mean), surface integral | 1.28 – 1.39 | |
-| $C_d$ (mean), solver momentum exchange | 1.04 | |
+| **Re = 100**: $St$ | 0.142 | 0.166 – 0.172 |
+| mean $C_d$, control volume | 1.54 | 1.38 – 1.43 |
+| mean $C_d$, surface integral | 1.28 – 1.39 | |
+| mean $C_d$, solver momentum exchange | 1.04 | |
 | $C_l$ amplitude, surface integral | 0.19 – 0.20 | 0.32 – 0.37 |
-| $C_l$ amplitude, solver momentum exchange | 0.15 | |
 
-How to read this:
+The solver does not reproduce the Re = 100 benchmark at this resolution: $St$ is 15 % low and the lift amplitude about half. A convergence study with more cells per $D$ has not been done.
 
-- **The solver does not reproduce the Re = 100 benchmark at this resolution.** The shedding is too slow ($St$ about 15 % low) and the lift amplitude is only about half of the published one, which is what strong numerical diffusion (first-order scheme, $16$ cells per $D$) would produce. A convergence study with more cells per diameter has not been done.
-- **Re = 40 is closer** (the drag is inside or slightly above the published range, the bubble is slightly short), but the result depends on how the force is computed.
-- **The three force estimates differ**, and the spread (about 30 % at Re = 40, between the solver's own value and the control volume) is larger than the spread between the published codes (about 8 %).
-  - *Control volume*: a momentum balance on a box around the cylinder. It is insensitive to the box size (1.73 – 1.76 for boxes from $0.7D$ to $3D$) but includes the numerical momentum loss of the advection scheme.
-  - *Surface integral*: pressure on the faces of the staircase surface plus a wall shear stress. The pressure part (1.15 at Re = 40) is robust; the viscous part depends on the assumed wall distance on a staircase surface (0.5 to 1 cell, hence the ranges).
-  - *Solver momentum exchange*: the momentum removed inside the cylinder. It underestimates the drag, because the semi-Lagrangian advection also removes momentum near the body, which this sum does not see. Use it for the time dependence only.
-- At Re = $10^4$ (previous section) the Strouhal number from a probe, 0.17, was not compared with a benchmark.
-
-Run it with
+The three drag estimates differ by up to 30 %:
+- `force_cv.jl`: momentum balance on a box around the cylinder (insensitive to the box size, but includes the momentum loss of the advection scheme).
+- `force_surface.jl`: pressure and wall shear on the staircase surface (the viscous part depends on the assumed wall distance of 0.5 to 1 cell, hence the ranges).
+- The solver's own force (`forces.csv`): momentum removed inside the cylinder. It underestimates the drag because the semi-Lagrangian advection also removes momentum near the body; use it for time dependence only.
 
 ```bash
 NS3D_USE_GPU=true julia --project -O3 --check-bounds=no scripts/benchmark.jl 100 16 200 out_bench 50
-julia scripts/forces.jl out_bench 100                       # St, mean Cd, Cl amplitude (solver force)
+julia scripts/forces.jl out_bench 100
 julia --project=scripts scripts/force_surface.jl out_bench 100 [wall_dist]
 julia --project=scripts scripts/force_cv.jl out_bench 100
 ```
 
-(the arguments of `benchmark.jl` are Re, cells per $D$, end time in $D/V_\infty$, output directory and output interval in steps).
+The arguments of `benchmark.jl` are Re, cells per $D$, end time in $D/V_\infty$, output directory and output interval in steps.
 
 ## Tests
 
@@ -174,6 +159,6 @@ The suite covers the interpolation kernel (exact for linear fields), a short end
 - Low-order scheme: first-order explicit Euler in time, semi-Lagrangian advection with linear interpolation. This is numerically diffusive; there is no turbulence model.
 - The explicit time step is limited by advection (`CFL_adv = 0.5`) and diffusion.
 - The cylinder is a staircase (voxelised) immersed boundary, not boundary-fitted.
-- Drag and lift: the three available estimates disagree by up to about 30 % (see [Validation](#validation-against-the-literature)); a conservative momentum scheme would make the solver's own force reliable.
+- Drag and lift: the three available estimates disagree by up to about 30 % (see [Validation](#validation)); a conservative momentum scheme would make the solver's own force reliable.
 - Output is gathered on rank 0, which limits the largest case that can be written.
 - The pressure solver dominates the run time; a multigrid or FFT-based solver would be faster at high resolution.
