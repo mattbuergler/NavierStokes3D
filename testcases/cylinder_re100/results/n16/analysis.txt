@@ -1,0 +1,17 @@
+--- solver force
+Re = 100, 3187 steps after t V∞/D = 100 (t_end = 199.2)
+St (from Cl)   = 0.1424   (period 7.02 D/V∞, 14 periods used for the means)
+Cd mean        = 1.0437   (max 1.0460, min 1.0411)
+Cl amplitude   = 0.1512   (max 0.1512, min -0.1512)
+--- surface force, wall distance 0.5 cells
+surface force, 64 frames from t V∞/D = 101.1 to 199.2
+Cd mean = 1.3945   (pressure 1.1716 + viscous 0.2229)
+Cl: mean = 0.0026, min -0.2034, max 0.2015
+--- surface force, wall distance 1.0 cells
+surface force, 64 frames from t V∞/D = 101.1 to 199.2
+Cd mean = 1.2830   (pressure 1.1716 + viscous 0.1115)
+Cl: mean = 0.0025, min -0.1931, max 0.1920
+--- control volume
+control-volume force, box x ∈ [-2.5, 5.0] D, y ∈ ±2.5 D, 64 frames from t V∞/D = 101.1 to 199.2
+Cd mean = 1.5369   (min 1.5057, max 1.5695)
+Cl mean = 0.0160   (min -1.9775, max 1.9625)

@@ -1,10 +1,14 @@
 # Post-processing of the results written by `scripts/run.jl`.
 #
-#   julia --project=scripts scripts/visualize.jl [datadir] [outdir] [stride] [framerate] [t_start]
+#   julia --project=scripts scripts/visualize.jl [datadir] [outdir] [stride] [framerate] [t_start] [crop] [period]
 #
 # Produces `snapshot.png` (last frame) and `flow.gif` (every `stride`-th frame) showing tracer,
 # speed, vorticity and pressure in the horizontal mid-plane (x-y, z = lz/2). The flow is
 # uniform along the cylinder axis (z), so this plane contains all of the information.
+#
+# `crop` is "xmin,xmax,ymax" in diameters from the cylinder axis, or "" for the whole domain.
+# `period` > 0 (in D/V∞) makes the gif one loop of a periodic flow: the frames after `t_start` are
+# sorted by their phase and evenly spaced phases are selected. Only use it if the flow is periodic.
 using CairoMakie
 using Printf
 import TOML
@@ -14,6 +18,8 @@ outdir  = length(ARGS) ≥ 2 ? ARGS[2] : "docs"
 stride  = length(ARGS) ≥ 3 ? parse(Int, ARGS[3]) : 1
 fps     = length(ARGS) ≥ 4 ? parse(Int, ARGS[4]) : 8
 tstart  = length(ARGS) ≥ 5 ? parse(Float64, ARGS[5]) : 0.0   # first time of the gif in D/V∞
+crop    = length(ARGS) ≥ 6 ? ARGS[6] : ""
+period  = length(ARGS) ≥ 7 ? parse(Float64, ARGS[7]) : 0.0   # shedding period in D/V∞, 0 = time order
 mkpath(outdir)
 
 meta   = TOML.parsefile(joinpath(datadir, "meta.toml"))
@@ -30,6 +36,16 @@ iz0    = cld(nz, 2)
 # cell-centre coordinates of the stored (halo-free) fields
 xs = range(-lx/2 + 1.5dx, step=dx, length=nx)
 ys = range(-ly/2 + 1.5dy, step=dy, length=ny)
+
+# plotted region
+if isempty(crop)
+    xview = (xs[1] - dx/2, xs[end] + dx/2)
+    yview = (ys[1] - dy/2, ys[end] + dy/2)
+else
+    xmin, xmax, ymax = parse.(Float64, split(crop, ','))
+    xview = (meta["cyl_ox"] + xmin*D, meta["cyl_ox"] + xmax*D)
+    yview = (meta["cyl_oy"] - ymax*D, meta["cyl_oy"] + ymax*D)
+end
 
 function readslice(name, frame)
     A = Array{Float32}(undef, nx, ny, nz)
@@ -91,7 +107,7 @@ with_theme(theme_latexfonts(); fontsize=15) do
         data = Observable(zeros(Float32, nx, ny))
         hm = heatmap!(ax, xs, ys, data; colormap=cmap, colorrange=lim, nan_color=:gray25)
         data_obs[key] = data
-        xlims!(ax, xs[1]-dx/2, xs[end]+dx/2); ylims!(ax, ys[1]-dy/2, ys[end]+dy/2)
+        xlims!(ax, xview...); ylims!(ax, yview...)
         Colorbar(fig[r, 2c], hm; width=12)
         r == 1 && hidexdecorations!(ax, ticks=false, grid=false)
         c == 2 && hideydecorations!(ax, ticks=false, grid=false)
@@ -99,13 +115,15 @@ with_theme(theme_latexfonts(); fontsize=15) do
     colgap!(fig.layout, 1, 6); colgap!(fig.layout, 2, 30); colgap!(fig.layout, 3, 6); rowgap!(fig.layout, 8)
 end
 
-function update!(frame)
+function update!(frame; phase=nothing)
     f = fields(frame)
     for (key, _, _, _) in panels
         data_obs[key][] = getproperty(f, key)
     end
     t = times[min(frame + 1, length(times))]
-    title_obs[] = @sprintf("Flow around a cylinder,  Re = %g,  t V∞/D = %.1f", meta["Re"], t * V∞ / D)
+    title_obs[] = isnothing(phase) ?
+        @sprintf("Flow around a cylinder,  Re = %g,  t V∞/D = %.1f", meta["Re"], t * V∞ / D) :
+        @sprintf("Flow around a cylinder,  Re = %g,  shedding phase %.2f", meta["Re"], phase)
 end
 
 update!(last(frames))
@@ -113,7 +131,22 @@ save(joinpath(outdir, "snapshot.png"), fig; px_per_unit=2)
 println("wrote ", joinpath(outdir, "snapshot.png"))
 
 gif_frames = filter(f -> times[f+1]*V∞/D ≥ tstart, frames)
-record(fig, joinpath(outdir, "flow.gif"), gif_frames[1:stride:end]; framerate=fps) do frame
-    update!(frame)
+if period > 0
+    # evenly spaced phases, with as many as the largest gap between the available phases allows
+    phases = [mod(times[f+1]*V∞/D / period, 1) for f in gif_frames]
+    order  = sortperm(phases)
+    gif_frames, phases = gif_frames[order], phases[order] .- phases[order[1]]
+    gaps   = [diff(phases); 1 - phases[end]]
+    n      = floor(Int, 1 / maximum(gaps))
+    picks  = unique([argmin(abs.(phases .- (k-1)/n)) for k in 1:n])
+    gif_frames, phases = gif_frames[picks], phases[picks]
+    println("one period from ", length(picks), " frames")
+    record(fig, joinpath(outdir, "flow.gif"), eachindex(gif_frames); framerate=fps) do i
+        update!(gif_frames[i]; phase=phases[i])
+    end
+else
+    record(fig, joinpath(outdir, "flow.gif"), gif_frames[1:stride:end]; framerate=fps) do frame
+        update!(frame)
+    end
 end
 println("wrote ", joinpath(outdir, "flow.gif"))

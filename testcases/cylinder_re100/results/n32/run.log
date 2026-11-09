@@ -1,0 +1,1 @@
+backend = CUDA, Re = 100.0, 960x512x6 cells, D = 32 cells, nt = 9600
